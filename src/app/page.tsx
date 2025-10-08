@@ -1,16 +1,14 @@
 "use client";
 
 import * as React from 'react';
-import { getAiResponse, summarizeConversation } from './actions';
+import { v4 as uuidv4 } from 'uuid';
+import { getAiResponse, summarizeConversation, getMessages } from './actions';
 import type { Conversation, Message, Task, Memory } from '@/lib/types';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ChatHistorySidebar } from '@/components/chat/chat-history-sidebar';
 import { ChatPanel } from '@/components/chat/chat-panel';
 import { MemoryEditorPanel } from '@/components/chat/memory-editor-panel';
 import { useToast } from '@/hooks/use-toast';
-
-// Mock UUID for now as it may cause issues in some environments without proper setup
-const mockUuid = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 const mockTasks: Task[] = [
     { id: '1', type: 'Reminder', content: 'Call mom', time: '2024-08-15T14:00:00' },
@@ -24,7 +22,6 @@ const mockMemories: Memory[] = [
   { id: '3', content: 'Prefers communication to be formal and concise.' },
 ];
 
-
 export default function Home() {
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
@@ -34,16 +31,13 @@ export default function Home() {
   const { toast } = useToast();
   const activeConversationRef = React.useRef(activeConversationId);
 
-
   React.useEffect(() => {
     setIsClient(true);
     try {
-      // In a production app, this would fetch from a database (e.g., PostgreSQL).
-      // For this prototype, we use localStorage to persist data.
       const storedConversations = localStorage.getItem('personal-ai-proto-chats');
       if (storedConversations) {
         const parsedConvos = JSON.parse(storedConversations) as Conversation[];
-        setConversations(parsedConvos.map(c => ({...c, createdAt: new Date(c.createdAt)})));
+        setConversations(parsedConvos.map(c => ({...c, createdAt: new Date(c.createdAt), messages: [] })));
       }
       const storedTasks = localStorage.getItem('personal-ai-proto-tasks');
       if (storedTasks) {
@@ -63,7 +57,8 @@ export default function Home() {
     if (isClient) {
       try {
         if (conversations.length > 0) {
-          localStorage.setItem('personal-ai-proto-chats', JSON.stringify(conversations));
+          const conversationsToStore = conversations.map(({ messages, ...convo }) => convo);
+          localStorage.setItem('personal-ai-proto-chats', JSON.stringify(conversationsToStore));
         }
         localStorage.setItem('personal-ai-proto-tasks', JSON.stringify(tasks));
         if (memories.length > 0) {
@@ -75,9 +70,15 @@ export default function Home() {
     }
   }, [conversations, tasks, memories, isClient]);
   
-  // Update the ref whenever activeConversationId changes
   React.useEffect(() => {
     activeConversationRef.current = activeConversationId;
+    if (activeConversationId) {
+      const fetchMessages = async () => {
+        const messages = await getMessages(activeConversationId);
+        setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages } : c));
+      };
+      fetchMessages();
+    }
   }, [activeConversationId]);
 
   const activeConversation = React.useMemo(() => {
@@ -86,12 +87,11 @@ export default function Home() {
   
   const handleAddMemory = async (content: string) => {
     if (content.trim() === '') return;
-    const newMemory: Memory = { id: mockUuid(), content };
+    const newMemory: Memory = { id: uuidv4(), content };
     setMemories(prev => [newMemory, ...prev]);
   };
 
   const createMemoryFromConversation = async (conversation: Conversation) => {
-    // Don't create memories for short conversations
     if (conversation.messages.length <= 2) return;
 
     const summary = await summarizeConversation(conversation.messages);
@@ -134,7 +134,7 @@ export default function Home() {
   };
 
   const handleAddTask = (task: Omit<Task, 'id'>) => {
-    const newTask = { ...task, id: mockUuid() };
+    const newTask = { ...task, id: uuidv4() };
     setTasks(prev => [newTask, ...prev]);
   };
   
@@ -147,32 +147,32 @@ export default function Home() {
   };
 
   const handleSendMessage = async (userInput: string) => {
+    let currentConvoId = activeConversationId;
+    
     const userMessage: Message = {
-      id: mockUuid(),
+      id: uuidv4(),
       role: 'user',
       content: userInput,
       createdAt: new Date(),
     };
-    
-    let currentConvoId = activeConversationId;
 
     if (!currentConvoId) {
       const newConversation: Conversation = {
-        id: mockUuid(),
+        id: uuidv4(),
         title: userInput.substring(0, 30) + (userInput.length > 30 ? '...' : ''),
         createdAt: new Date(),
         messages: [userMessage],
       };
+      currentConvoId = newConversation.id;
       setConversations(prev => [newConversation, ...prev]);
       setActiveConversationId(newConversation.id);
-      currentConvoId = newConversation.id;
     } else {
        setConversations(prev => prev.map(c => 
         c.id === currentConvoId ? { ...c, messages: [...c.messages, userMessage] } : c
       ));
     }
 
-    const assistantMessageId = mockUuid();
+    const assistantMessageId = uuidv4();
     const loadingMessage: Message = {
       id: assistantMessageId,
       role: 'assistant',
@@ -185,7 +185,7 @@ export default function Home() {
       c.id === currentConvoId ? { ...c, messages: [...c.messages, loadingMessage] } : c
     ));
 
-    const { response, intent, entities, task } = await getAiResponse(userInput);
+    const { response, intent, entities, task } = await getAiResponse(userInput, currentConvoId);
     
     if (task) {
         handleAddTask(task);
@@ -215,7 +215,7 @@ export default function Home() {
   };
 
   if (!isClient) {
-    return null; // or a loading skeleton
+    return null;
   }
 
   return (

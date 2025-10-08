@@ -7,6 +7,7 @@ This is a Next.js project for a personal AI assistant named SABA, built using Ne
 Before you begin, ensure you have the following installed on your local machine:
 - [Node.js](https://nodejs.org/) (version 20 or later recommended)
 - [npm](https://www.npmjs.com/) (which comes with Node.js)
+- [Docker](https://www.docker.com/products/docker-desktop)
 
 ## Running Locally
 
@@ -34,9 +35,21 @@ The AI capabilities of this application are powered by the Google Gemini API. To
 
     Replace `your_api_key_here` with the actual key you obtained.
 
-### 3. Run the Development Servers
+### 3. Run Redis for Short-Term Memory
 
-This project requires two separate development servers to be running at the same time: one for the Next.js web application and one for the Genkit AI flows.
+SABA uses Redis for short-term conversation memory. You can run a local Redis instance using Docker.
+
+In a new terminal, run the following command:
+
+```bash
+docker run -d -p 6379:6379 redis
+```
+
+This will start a Redis container and map it to port 6379, which the application will connect to.
+
+### 4. Run the Development Servers
+
+This project requires two separate development servers to be running at the same time: one for the Next.js web application and one for the Genkit AI flows. Make sure your Redis container is running before starting the servers.
 
 **Terminal 1: Run the Next.js App**
 
