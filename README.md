@@ -1,53 +1,154 @@
-# SABA - A Personal AI Assistant
+# SABA - AI Assistant Prototype
 
-This is a Next.js project for a personal AI assistant named SABA, built using Next.js, Genkit, and ShadCN UI components.
+An intelligent AI assistant built with Next.js, Genkit, and Google's Gemini API. Features include chat interface, task management, and persistent conversation memory using Redis and PostgreSQL.
+
+## Features
+
+- 🤖 AI-powered chat interface using Google's Gemini API
+- 💾 Persistent storage with PostgreSQL and Redis
+- 🔄 Real-time conversation memory
+- 🎯 Task management capabilities
+- 🚀 Modern tech stack with Next.js and TypeScript
+- 🛠 Docker support for easy development
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed on your local machine:
-- [Node.js](https://nodejs.org/) (version 20 or later recommended)
-- [npm](https://www.npmjs.com/) (which comes with Node.js)
-- [Docker](https://www.docker.com/products/docker-desktop)
+Before running this project, make sure you have:
 
-## Running Locally
+- [Node.js](https://nodejs.org/) v20 or later
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- [Git](https://git-scm.com/)
+- A [Google AI Studio](https://aistudio.google.com/app/apikey) API key
 
-To run this project on your local system, follow these steps:
+## Quick Start Guide
 
-### 1. Install Dependencies
+### 1. Clone the Repository
 
-First, open a terminal in the project's root directory and install the necessary packages by running:
+```bash
+git clone https://github.com/BhagavanReddy07/AI-assistant-prototype.git
+cd AI-assistant-prototype
+```
+
+### 2. Set Up Environment Variables
+
+```bash
+# Copy the example env file
+cp .env.example .env.local
+
+# Edit .env.local with your settings
+# Most importantly, add your Gemini API key:
+GEMINI_API_KEY=your_api_key_here
+```
+
+### 3. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Set Up Environment Variables
+### 4. Start Docker Services
 
-The AI capabilities of this application are powered by the Google Gemini API. To use it, you need an API key.
-
-1.  Create a new file named `.env` in the root of your project directory.
-2.  Obtain a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-3.  Add the API key to your `.env` file like this:
-
-    ```
-    GEMINI_API_KEY=your_api_key_here
-    ```
-
-    Replace `your_api_key_here` with the actual key you obtained.
-
-### 3. Run Redis for Short-Term Memory
-
-SABA uses Redis for short-term conversation memory. You can run a local Redis instance using Docker.
-
-In a new terminal, run the following command:
+The project uses Docker Compose to manage Redis, PostgreSQL, and Neo4j:
 
 ```bash
-docker run -d -p 6379:6379 redis
+# Start all services
+npm run docker:up
+
+# To stop services when done
+npm run docker:down
 ```
 
-This will start a Redis container and map it to port 6379, which the application will connect to.
+### 5. Start Development Server
 
-### 4. Run the Development Servers
+```bash
+# This will start Next.js with Docker services
+npm run dev:with-docker
+```
+
+Visit [http://localhost:9003](http://localhost:9003) to see the application.
+
+## Project Structure
+
+```
+├── src/
+│   ├── ai/              # AI/Genkit integration
+│   │   ├── flows/       # AI conversation flows
+│   │   └── genkit.ts    # Genkit configuration
+│   ├── app/             # Next.js app directory
+│   │   └── api/         # API routes
+│   ├── components/      # React components
+│   │   ├── chat/        # Chat interface components
+│   │   └── ui/          # UI components
+│   └── lib/            # Utilities and database clients
+├── scripts/            # Database initialization scripts
+└── docker-compose.yml  # Docker services configuration
+```
+
+## Development Tools
+
+### Start Genkit Development UI
+
+```bash
+npm run genkit:watch
+```
+
+This starts the Genkit Developer UI at [http://localhost:4000](http://localhost:4000)
+
+### Check Docker Services
+
+```bash
+# Check Redis data
+docker exec -it saba-redis redis-cli -p 6380
+
+# Check PostgreSQL data
+docker exec -it saba-postgres psql -U saba
+```
+
+## Database Schemas
+
+### PostgreSQL Tables
+- Users: Stores user accounts and authentication data
+- Conversations: Stores chat history and metadata
+- Tasks: Stores user tasks and reminders
+
+### Redis Data
+- Session data
+- Temporary conversation context
+- Real-time chat state
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Docker Services Not Starting**
+   ```bash
+   # Check service status
+   docker ps
+   # Check logs
+   docker-compose logs
+   ```
+
+2. **Database Connection Issues**
+   - Verify PostgreSQL is running: `docker ps | grep postgres`
+   - Check connection string in .env.local
+   - Ensure port 5432 is available
+
+3. **Genkit/AI Issues**
+   - Verify API key in .env.local
+   - Check Genkit logs: `npm run genkit:watch`
+   - Ensure internet connectivity for API calls
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 This project requires two separate development servers to be running at the same time: one for the Next.js web application and one for the Genkit AI flows. Make sure your Redis container is running before starting the servers.
 
