@@ -15,6 +15,8 @@ import type { Task } from '@/lib/types';
 
 const GenerateResponseInputSchema = z.object({
   userInput: z.string().describe('The user input text.'),
+  // optional conversation history (oldest -> newest) serialized as text
+  history: z.string().optional().describe('Conversation history text, oldest-first'),
 });
 export type GenerateResponseInput = z.infer<typeof GenerateResponseInputSchema>;
 
@@ -64,35 +66,18 @@ const generateResponsePrompt = ai.definePrompt({
   name: 'generateResponsePrompt',
   input: {schema: GenerateResponseInputSchema},
   output: {schema: z.object({
-    response: z.string(),
-    intent: z.string(),
+    intent: z.enum(['Create Task', 'Get Information', 'Chit-Chat', 'Unknown']),
     entities: z.array(z.string()),
+    response: z.string(),
   })},
-  tools: [manageTasksTool],
-  prompt: `You are a helpful AI assistant named SABA. Your role is to assist the user with their requests, including answering questions and managing tasks.
+  prompt: `You are SABA. User says: "{{{userInput}}}"
 
-First, determine the user's intent. The possible intents are:
-- Create Task: The user wants to create a task, reminder, or alarm.
-- Get Information: The user is asking a question or seeking information.
-- Chit-Chat: The user is making casual conversation.
-- Unknown: The user's intent is unclear or does not fit into any of the above categories.
-
-Next, extract any relevant entities from the user's request. Entities are things like names, dates, times, and locations.
-
-Finally, generate a helpful response to the user's request.
-
-If the user asks to set a reminder, alarm, or create a task, use the manageTasks tool.
-- The 'type' of the task should be 'Task', 'Reminder', or 'Alarm' based on the user's request.
-- The 'content' of the task should be a concise description of what the user wants to do (e.g., "Call mom", "Finish project report").
-- If a time is mentioned, include it in the 'time' field.
-
-When you use the tool to add a task, respond to the user with a simple confirmation like "OK, I've added [task content]." or "Reminder set." Do not output JSON.
-
-For all other requests, provide a helpful and relevant response.
-
-The user input is: {{{userInput}}}
-
-Respond with the intent, entities, and a response in a valid JSON format.`,
+Respond to what the user actually said. Format your response as a JSON object with:
+{
+  "intent": "Get Information",
+  "entities": [],
+  "response": "your direct answer to the user's input goes here"
+}`,
 });
 
 const generateResponseFlow = ai.defineFlow(
@@ -102,28 +87,17 @@ const generateResponseFlow = ai.defineFlow(
     outputSchema: GenerateResponseOutputSchema,
   },
   async input => {
-    const llmResponse = await generateResponsePrompt(input);
-    const { response, intent, entities } = llmResponse.output!;
-
-    let task = null;
-    if (llmResponse.toolRequest) {
-        // Find the output of the manageTasks tool call
-        const taskToolOutput = llmResponse.toolRequest.tool.output;
-        if (taskToolOutput) {
-            task = taskToolOutput as Omit<Task, 'id'>;
-        }
+    try {
+      console.log('Sending to LLM:', JSON.stringify(input, null, 2));
+      const result = await generateResponsePrompt(input);
+      console.log('Got LLM response:', JSON.stringify(result.output, null, 2));
+      return {
+        ...result.output!,
+        task: null
+      };
+    } catch (err) {
+      console.error('Error calling generateResponsePrompt:', err);
+      throw err;
     }
-
-    const output: GenerateResponseOutput = {
-        response: response || llmResponse.text,
-        intent,
-        entities,
-        task: task,
-    };
-
-    if (!output.response) {
-      throw new Error("AI failed to generate a response.");
-    }
-    return output;
   }
 );

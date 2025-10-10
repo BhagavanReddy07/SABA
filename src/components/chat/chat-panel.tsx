@@ -63,9 +63,14 @@ export function ChatPanel({ conversation, onSendMessage }: ChatPanelProps) {
         <div className="max-w-4xl mx-auto w-full">
           {conversation && conversation.messages.length > 0 ? (
             <div className="space-y-6">
-              {conversation.messages.map(message => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
+              {(() => {
+                // Dedupe messages by id to avoid rendering duplicates if backend sent repeated IDs
+                const uniqueMessages = conversation.messages.filter((m, i, arr) => arr.findIndex(x => x.id === m.id) === i);
+                return uniqueMessages.map((message, index) => (
+                  // Use composite key including index to avoid duplicate key warnings when message IDs are not unique
+                  <ChatMessage key={`${message.id}-${index}`} message={message} />
+                ));
+              })()}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
@@ -75,8 +80,8 @@ export function ChatPanel({ conversation, onSendMessage }: ChatPanelProps) {
               <h2 className="text-2xl font-semibold text-foreground mb-2">SABA</h2>
               <p className="max-w-md mb-6">Start a conversation with your personal AI assistant. It learns, adapts, and helps you with your tasks.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-lg">
-                {starterPrompts.map(prompt => (
-                  <Button variant="outline" size="sm" key={prompt} onClick={() => onSendMessage(prompt)} className="text-left justify-start h-auto py-2">
+                {starterPrompts.map((prompt, idx) => (
+                  <Button variant="outline" size="sm" key={`starter-${idx}`} onClick={() => onSendMessage(prompt)} className="text-left justify-start h-auto py-2">
                     {prompt}
                   </Button>
                 ))}

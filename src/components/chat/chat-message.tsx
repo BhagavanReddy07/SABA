@@ -70,8 +70,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
             </div>
             {entities &&
               entities.length > 0 &&
-              entities.map((entity) => (
-                <Badge variant="outline" key={entity}>
+              entities.map((entity, idx) => (
+                // include index in key to avoid duplicates when entity text repeats
+                <Badge variant="outline" key={`${entity}-${idx}`}>
                   {entity}
                 </Badge>
               ))}
