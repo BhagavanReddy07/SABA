@@ -21,8 +21,10 @@ import {
   BrainCircuit,
   Trash2,
   ListTodo,
+  LogOut,
+  User,
 } from 'lucide-react';
-import type { Conversation, Task } from '@/lib/types';
+import type { Conversation, Task, User as UserType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -46,6 +48,8 @@ interface ChatHistorySidebarProps {
   tasks: Task[];
   onAddTask: (task: Omit<Task, 'id'>) => void;
   onDeleteTask: (id: string) => void;
+  currentUser?: UserType | null;
+  onLogout?: () => void;
 }
 
 export function ChatHistorySidebar({
@@ -57,6 +61,8 @@ export function ChatHistorySidebar({
   tasks,
   onAddTask,
   onDeleteTask,
+  currentUser,
+  onLogout,
 }: ChatHistorySidebarProps) {
   const [isTaskManagerOpen, setIsTaskManagerOpen] = React.useState(false);
 
@@ -136,14 +142,49 @@ export function ChatHistorySidebar({
         </SidebarContent>
         <SidebarFooter>
           <Separator className="mb-2 bg-sidebar-border/50" />
-          <div className="p-2 flex items-center gap-2">
-            <Avatar className="h-9 w-9">
-                <AvatarFallback>U</AvatarFallback>
+          <div className="p-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-9 w-9">
+                <AvatarFallback>
+                  {currentUser?.name?.charAt(0).toUpperCase() || 'U'}
+                </AvatarFallback>
               </Avatar>
               <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                  <span className="text-sm font-medium text-sidebar-foreground">User</span>
-                  <span className="text-xs text-muted-foreground">user@email.com</span>
+                <span className="text-sm font-medium text-sidebar-foreground">
+                  {currentUser?.name || 'User'}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {currentUser?.email || 'user@email.com'}
+                </span>
               </div>
+            </div>
+            {onLogout && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 group-data-[collapsible=icon]:hidden"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sign Out?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You will need to sign in again to access your conversations and data.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={onLogout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Sign Out
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </SidebarFooter>
       </Sidebar>

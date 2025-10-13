@@ -23,5 +23,7 @@ CREATE TABLE IF NOT EXISTS messages (
   user_id UUID,
   role TEXT,
   content TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  intent TEXT,
+  entities JSONB
 );

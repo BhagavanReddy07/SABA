@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Conversation } from '@/lib/types';
 import { ChatMessage } from './chat-message';
 import { Card, CardContent } from '../ui/card';
+import { aiAssistant } from '@/lib/ai-assistant';
+import { v4 as uuidv4 } from 'uuid';
 
 interface ChatPanelProps {
   conversation: Conversation | null;

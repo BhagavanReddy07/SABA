@@ -29,6 +29,10 @@ const GenerateResponseOutputSchema = z.object({
     content: z.string(),
     time: z.string().optional(),
   }).nullable().describe('The task object if a task was created.'),
+  shouldCreateTask: z.boolean().optional(),
+  taskType: z.string().optional(),
+  taskContent: z.string().optional(),
+  taskTime: z.string().optional(),
 });
 export type GenerateResponseOutput = z.infer<typeof GenerateResponseOutputSchema>;
 
@@ -66,18 +70,15 @@ const generateResponsePrompt = ai.definePrompt({
   name: 'generateResponsePrompt',
   input: {schema: GenerateResponseInputSchema},
   output: {schema: z.object({
-    intent: z.enum(['Create Task', 'Get Information', 'Chit-Chat', 'Unknown']),
+    intent: z.string(),
     entities: z.array(z.string()),
     response: z.string(),
+    shouldCreateTask: z.boolean().optional(),
+    taskType: z.string().optional(),
+    taskContent: z.string().optional(),
+    taskTime: z.string().optional(),
   })},
-  prompt: `You are SABA. User says: "{{{userInput}}}"
-
-Respond to what the user actually said. Format your response as a JSON object with:
-{
-  "intent": "Get Information",
-  "entities": [],
-  "response": "your direct answer to the user's input goes here"
-}`,
+  prompt: `Respond to this message: "{{userInput}}" with JSON format only.`,
 });
 
 const generateResponseFlow = ai.defineFlow(
@@ -91,9 +92,27 @@ const generateResponseFlow = ai.defineFlow(
       console.log('Sending to LLM:', JSON.stringify(input, null, 2));
       const result = await generateResponsePrompt(input);
       console.log('Got LLM response:', JSON.stringify(result.output, null, 2));
+
+      // Handle task creation if needed
+      let task = null;
+      if (result.output?.shouldCreateTask && result.output?.taskContent) {
+        task = {
+          type: (result.output.taskType as 'Task' | 'Reminder' | 'Alarm') || 'Task',
+          content: result.output.taskContent,
+          time: result.output.taskTime || undefined,
+        };
+        console.log('Creating task:', task);
+      }
+
       return {
-        ...result.output!,
-        task: null
+        response: result.output!.response,
+        intent: result.output!.intent,
+        entities: result.output!.entities,
+        task: task,
+        shouldCreateTask: result.output!.shouldCreateTask,
+        taskType: result.output!.taskType as 'Task' | 'Reminder' | 'Alarm' | undefined,
+        taskContent: result.output!.taskContent,
+        taskTime: result.output!.taskTime,
       };
     } catch (err) {
       console.error('Error calling generateResponsePrompt:', err);
