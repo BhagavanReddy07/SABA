@@ -33,12 +33,14 @@ export async function getAiResponse(userInput: string, conversationId: string, u
             conversationId: conversationId,
         };
 
-        // Store user message in conversation memory for context
+        // Store user message in conversation memory for context (with correct identifiers)
         await conversationMemory.storeMessageContext({
             id: userMessage.id,
             role: 'user',
             content: userInput,
             timestamp: new Date(),
+            conversationId,
+            userId,
             entities: [], // Will be filled by AI processing
             intent: '' // Will be filled by AI processing
         });
@@ -94,12 +96,12 @@ export async function getAiResponse(userInput: string, conversationId: string, u
         const historyText = historyParts.join('\n');
 
         // Generate contextual prompt using enhanced memory system
-        const { prompt } = await conversationMemory.generateContextualPrompt(userInput, conversationId, userId);
+        const { history: enhancedHistory } = await conversationMemory.generateContextualPrompt(userInput, conversationId, userId);
 
-        // Use the enhanced prompt for better context retention
+        // Use the enhanced history (includes similar past contexts) for better context retention
         const aiInput = {
           userInput,
-          history: historyText
+          history: enhancedHistory || historyText
         };
 
         const result = await generateResponseFromIntentAndEntities(aiInput);
@@ -121,12 +123,14 @@ export async function getAiResponse(userInput: string, conversationId: string, u
         };
         await saveMessage(aiMessage);
 
-        // Store AI response in conversation memory for context
+        // Store AI response in conversation memory for context (with correct identifiers)
         await conversationMemory.storeMessageContext({
             id: aiMessage.id,
             role: 'assistant',
             content: result.response,
             timestamp: new Date(),
+            conversationId,
+            userId,
             entities: result.entities || [],
             intent: result.intent || ''
         });

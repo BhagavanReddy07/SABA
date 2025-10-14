@@ -37,11 +37,15 @@ export function TaskManager({ open, onOpenChange, tasks, onAddTask, onDeleteTask
     const taskToAdd: Omit<Task, 'id'> = {
       type: newTaskType,
       content: newTaskContent,
+      time: newTaskTime ? new Date(newTaskTime).toISOString() : undefined,
+      completed: false,
+      createdAt: new Date(),
+      userId: 'default_user',
+      conversationId: 'default_conversation',
+      priority: 'medium',
+      tags: [],
     };
-    if (newTaskTime) {
-        taskToAdd.time = new Date(newTaskTime).toISOString();
-    }
-    
+
     onAddTask(taskToAdd);
     
     setNewTaskContent('');

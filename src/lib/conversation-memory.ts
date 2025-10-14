@@ -6,6 +6,8 @@ export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  conversationId: string;
+  userId: string;
   entities?: string[];
   intent?: string;
 }
@@ -48,12 +50,12 @@ export class ConversationMemoryManager {
   async saveMessage(message: ConversationMessage): Promise<void> {
     try {
       const client = await getRedisClient();
-      const key = `conversation:${message.id}`;
+      const key = `conversation:msg:${message.id}`;
       await client.setEx(key, 7 * 24 * 60 * 60, JSON.stringify(message)); // 7 days
       console.log('Message saved with key:', key);
 
-      // Also save to conversation history list (use a fixed key for users)
-      const historyKey = message.id === 'users_list' ? 'users_list' : `conversation:history:${message.id}`;
+      // Also save to conversation history list by conversationId
+      const historyKey = `conversation:history:${message.conversationId}`;
       await client.lPush(historyKey, JSON.stringify(message));
       await client.lTrim(historyKey, 0, 99); // Keep last 100 messages
       await client.expire(historyKey, 7 * 24 * 60 * 60);
@@ -67,8 +69,7 @@ export class ConversationMemoryManager {
   async getConversationHistory(conversationId: string, limit: number = 50): Promise<ConversationMessage[]> {
     try {
       const client = await getRedisClient();
-      // Special handling for 'users_list' to match how it's saved
-      const historyKey = conversationId === 'users_list' ? 'users_list' : `conversation:history:${conversationId}`;
+      const historyKey = `conversation:history:${conversationId}`;
       const messages = await client.lRange(historyKey, 0, limit - 1);
 
       return messages
@@ -179,9 +180,13 @@ export class ConversationMemoryManager {
 
     // Format similar contexts for additional context
     const similarContextText = similarContexts.length > 0
-      ? `\nRELEVANT PAST CONTEXTS:\n${similarContexts.map(ctx =>
-          `From ${ctx.metadata.timestamp}: ${ctx.metadata.messageType === 'user' ? 'User' : 'Assistant'} - ${ctx.metadata.intent || 'general'}`
-        ).join('\n')}`
+      ? `\nRELEVANT PAST CONTEXTS:\n${similarContexts.map(ctx => {
+          const who = ctx.metadata.messageType === 'user' ? 'User' : 'Assistant';
+          const when = ctx.metadata.timestamp;
+          const intent = ctx.metadata.intent || 'general';
+          const preview = (ctx as any).content ? ` — "${((ctx as any).content as string).slice(0, 120)}${((ctx as any).content as string).length > 120 ? '…' : ''}"` : '';
+          return `From ${when}: ${who} (${intent})${preview}`;
+        }).join('\n')}`
       : '';
 
     // Build contextual prompt with enhanced personalization
@@ -209,9 +214,9 @@ INSTRUCTIONS:
 3. **Consistency**: Maintain consistent personality and remember user preferences across all interactions.
 4. **Helpfulness**: Be proactive in offering relevant assistance based on their fitness goals and interests.
 5. **Memory Integration**: Use relevant past contexts to provide more informed, personalized responses.
-6. **Goal-Oriented**: Since they want to gain weight, focus on nutrition, meal planning, and fitness strategies.
+6. **Clarify Prior Topics**: If the user alludes to earlier topics, confirm politely (e.g., "Are you talking about our previous discussion on ...?") before proceeding.
 
-Please provide a helpful, contextual response that builds upon our conversation history and directly addresses their weight gain goals.`;
+Please provide a helpful, contextual response that builds upon our conversation history and directly addresses the user's request.`;
 
     console.log('✅ Generated contextual prompt, length:', prompt.length);
     return { prompt, history: history + similarContextText };
@@ -229,9 +234,9 @@ Please provide a helpful, contextual response that builds upon our conversation 
           id: `ctx_${message.id}_${Date.now()}`,
           content: message.content,
           metadata: {
-            conversationId: message.id,
-            userId: 'default_user', // You might want to add userId to the message interface
-            timestamp: message.timestamp.toISOString(),
+            conversationId: message.conversationId,
+            userId: message.userId,
+            timestamp: (message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp)).toISOString(),
             messageType: message.role,
             entities: message.entities,
             intent: message.intent

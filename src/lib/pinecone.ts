@@ -16,6 +16,7 @@ export interface ConversationContext {
     messageType: 'user' | 'assistant';
     entities?: string[];
     intent?: string;
+    content?: string;
   };
   score?: number;
 }
@@ -123,7 +124,7 @@ export class PineconeService {
       await index.upsert([{
         id: context.id,
         values: embedding,
-        metadata: context.metadata
+        metadata: { ...context.metadata, content: context.content }
       }]);
 
       console.log(`Stored conversation context: ${context.id}`);
@@ -159,7 +160,7 @@ export class PineconeService {
 
       return queryResponse.matches?.map(match => ({
         id: match.id,
-        content: '', // We don't store the original content in metadata
+        content: (match.metadata as any)?.content || '',
         metadata: match.metadata as ConversationContext['metadata'],
         score: match.score
       })) || [];

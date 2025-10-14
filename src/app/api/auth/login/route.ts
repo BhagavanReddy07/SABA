@@ -54,12 +54,14 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
     };
 
-    // Save session
+    // Save session marker in memory (tagged to user and a synthetic session conversation)
     await conversationMemory.saveMessage({
       id: uuidv4(),
       role: 'assistant',
       content: `SESSION:${JSON.stringify(session)}`,
       timestamp: new Date(),
+      conversationId: `session_${foundUser.id}`,
+      userId: foundUser.id,
     });
 
     // Get user preferences

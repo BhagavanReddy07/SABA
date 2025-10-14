@@ -98,6 +98,8 @@ export class AIAssistant {
         role: 'user',
         content: userInput,
         timestamp: new Date(),
+        conversationId,
+        userId,
         entities: aiResponse.entities,
         intent: aiResponse.intent
       };
@@ -109,6 +111,8 @@ export class AIAssistant {
         role: 'assistant',
         content: aiResponse.response,
         timestamp: new Date(),
+        conversationId,
+        userId,
         entities: aiResponse.entities,
         intent: aiResponse.intent
       };
@@ -117,8 +121,13 @@ export class AIAssistant {
       // Handle task creation if needed
       let createdTask: Task | undefined;
       if (aiResponse.shouldCreateTask && aiResponse.taskContent) {
+        const safeTaskType: 'Task' | 'Reminder' | 'Alarm' =
+          aiResponse.taskType === 'Task' || aiResponse.taskType === 'Reminder' || aiResponse.taskType === 'Alarm'
+            ? aiResponse.taskType
+            : 'Task';
+
         createdTask = await taskManager.createTask({
-          type: aiResponse.taskType || 'Task',
+          type: safeTaskType,
           content: aiResponse.taskContent,
           time: aiResponse.taskTime,
           userId,

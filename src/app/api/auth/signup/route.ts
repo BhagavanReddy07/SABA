@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { createUser, getUserByEmail } from '@/lib/db'; // Import DB functions
 import { conversationMemory } from '@/lib/conversation-memory'; // Keep for preferences for now
-import type { User, UserPreferences, UserSession } from '@/lib/types';
+import type { User, UserPreferences as AppUserPreferences, UserSession } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Set default preferences
-    const defaultPreferences: UserPreferences = {
+    const defaultPreferences: AppUserPreferences = {
       theme: 'dark',
       language: 'en',
       timezone: 'UTC',
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     console.log('User data saved successfully to PostgreSQL:', user.id);
 
     // Save user preferences
-    await conversationMemory.saveUserPreferences(user.id, defaultPreferences);
+    await conversationMemory.saveUserPreferences(user.id, { name, preferences: { communicationStyle: 'friendly' } });
 
     return NextResponse.json({
       message: 'Account created successfully! Please login with your credentials.',
