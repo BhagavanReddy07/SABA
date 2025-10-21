@@ -1,0 +1,48 @@
+/* Sidebar container */
+.sidebar {
+  width: 240px;
+  height: 100vh;
+  background-color: #f8f9fa; /* light gray */
+  border-right: 1px solid #dee2e6;
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+/* Title */
+.sidebar h4 {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #343a40; /* dark gray */
+}
+
+/* Navigation list */
+.sidebar .nav-link {
+  color: #495057;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  transition: all 0.2s ease-in-out;
+  font-weight: 500;
+}
+
+/* Hover effect */
+.sidebar .nav-link:hover {
+  background-color: #e9ecef;
+  color: #0d6efd; /* Bootstrap primary blue */
+  text-decoration: none;
+}
+
+/* Active link */
+.sidebar .nav-link.active {
+  background-color: #0d6efd;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Make sure links have no underline */
+.sidebar a {
+  text-decoration: none;
+}

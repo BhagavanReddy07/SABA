@@ -1,0 +1,70 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/.next
+/build
+/.vercel
+/.turbo
+.eslintcache
+tsconfig.tsbuildinfo
+
+# Runtime data
+/.data
+celerybeat-schedule*
+
+# Editors & OS
+.vscode/
+.idea/
+Thumbs.db
+
+# misc
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python backend
+/backend/.env
+/backend/.venv/
+/backend/venv/
+**/__pycache__/
+*.pyc
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Docs to exclude from repo history (keep project tidy)
+API_REFERENCE.md
+COMPLETION_SUMMARY.md
+Documentation_Index.md
+FINAL_SUMMARY.md
+FIXES_APPLIED_OCTOBER_20.md
+MASTER_SUMMARY.md
+QUICK_REFERENCE.md
+QUICK_START_EMAIL_SYSTEM.md
+README_FINAL.md
+README_TASKS_CELERY.md
+SENDGRID_SETUP.md
+SETUP_CHECKLIST.md
+TASK_EMAIL_SYSTEM_FIXED.md
+TASKS_CELERY_GUIDE.md
+TASKS_CELERY_SUMMARY.md
+VISUAL_SUMMARY.md
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
