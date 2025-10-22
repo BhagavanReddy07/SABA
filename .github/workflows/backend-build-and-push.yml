@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,3 +28,6 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/saba-backend:latest
+
+      - name: Show pushed image tag
+        run: echo "Pushed ghcr.io/${{ github.repository_owner }}/saba-backend:latest"
