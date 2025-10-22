@@ -261,7 +261,7 @@ async function handler(
 
       if (parsed.intent === 'reminder') {
         try {
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://deploy-production-4105.up.railway.app'
+          const backendUrl = 'https://deploy-production-4105.up.railway.app'
           const createRes = await fetch(`${backendUrl}/api/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

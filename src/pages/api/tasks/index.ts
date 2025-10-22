@@ -7,7 +7,7 @@ type ResponseData = {
   error?: string
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://deploy-production-4105.up.railway.app'
+const BACKEND_URL = 'https://deploy-production-4105.up.railway.app'
 
 export default async function handler(
   req: NextApiRequest,
