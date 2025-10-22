@@ -26,13 +26,22 @@
     "tailwindcss-animate": "1.0.7"
   },
   "devDependencies": {
+    "@eslint/css": "^0.13.0",
+    "@eslint/js": "^9.38.0",
+    "@eslint/json": "^0.13.2",
+    "@eslint/markdown": "^7.4.1",
     "@types/node": "20.10.6",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
     "autoprefixer": "10.4.16",
+    "eslint": "^9.38.0",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.4.0",
+    "jiti": "^2.6.1",
     "postcss": "8.4.32",
     "tailwindcss": "3.4.1",
-    "typescript": "5.3.3"
+    "typescript": "5.3.3",
+    "typescript-eslint": "^8.46.2"
   },
   "proxy": "http://localhost:5000",
   "eslintConfig": {
