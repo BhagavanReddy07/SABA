@@ -20,5 +20,9 @@ COPY . .
 # Expose FastAPI port (use 5000 to match frontend proxy and app config)
 EXPOSE 5000
 
-# Start the application on port 5000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000"]
+# Copy and make the start script executable
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+# Start the application via start.sh (runs migrations then uvicorn)
+CMD ["/start.sh"]
