@@ -1,0 +1,19 @@
+FROM node:18-alpine AS build
+WORKDIR /app
+
+# Install deps
+COPY package.json package-lock.json* ./
+RUN apk add --no-cache libc6-compat python3 make g++ \
+  && npm install
+
+# Copy sources and build
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app .
+RUN npm ci --production --no-audit --no-fund
+EXPOSE 3000
+CMD ["npm", "run", "start"]
