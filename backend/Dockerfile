@@ -32,4 +32,4 @@ ENV MALLOC_MMAP_THRESHOLD_=131072
 EXPOSE 5000
 
 # Download models on startup, then run server
-CMD python download_models.py && ./start.sh
+CMD python download_models.py && bash start.sh
