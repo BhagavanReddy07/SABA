@@ -6,9 +6,8 @@ type ResponseData = {
   error?: string
 }
 
-// Default to IPv4 loopback to avoid Windows/IPv6 (::1) connect refusals when
-// the backend is bound only on 127.0.0.1
-const BACKEND_URL = 'https://deploy-production-4105.up.railway.app'
+// Prefer env var during deploy; fallback to local backend for dev
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
 
 export default async function handler(
   req: NextApiRequest,

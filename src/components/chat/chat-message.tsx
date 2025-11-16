@@ -63,8 +63,8 @@ export function ChatMessage({ message, isLoading }: ChatMessageProps) {
           {isLoading && isAssistant && (
             <span className="inline-flex gap-1">
               <span className="animate-typing inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
-              <span className="animate-typing animation-delay-100 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
-              <span className="animate-typing animation-delay-200 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
+              <span className="animate-typing delay-100 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
+              <span className="animate-typing delay-200 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
             </span>
           )}
         </div>

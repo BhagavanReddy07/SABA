@@ -133,7 +133,9 @@ Respond professionally and focus on what solves the user's need with minimal flu
 // Quick natural-language reminder/task parser (very simple, on-purpose)
 function parseReminderIntent(text: string): { intent: 'reminder' | null; content?: string; dueDateISO?: string } {
   const lower = text.toLowerCase()
-  const intent = /\b(remind|reminder|todo|task|remember)\b/.test(lower) ? 'reminder' : null
+  // Stricter trigger: only fire on explicit reminder/task phrases, not generic 'remember'
+  const trigger = /(\bremind\s+me\b|\bset\s+(?:a\s+)?reminder\b|\bcreate\s+(?:a\s+)?task\b|\badd\s+(?:a\s+)?task\b|\breminder\b|\btodo\b|\btask\b)/i
+  const intent = trigger.test(lower) ? 'reminder' : null
   if (!intent) return { intent }
 
   // naive time parse: look for patterns like 'at 10 45 pm', 'at 10:45 pm', 'today at 6pm'
@@ -190,10 +192,10 @@ function parseReminderIntent(text: string): { intent: 'reminder' | null; content
 
   // default: if said 'today' and time-like tokens exist but Date failed, try today 20:00 etc. Skip for now.
 
-  // Extract content after 'remind me to' if present
+  // Extract content after 'remind me to' or 'remind me about'
   let content = text
-  const m = /remind\s+me\s+to\s+(.+?)(?:\s+at\s+.+)?$/i.exec(text)
-  if (m && m[1]) content = m[1].trim()
+  const m = /(remind\s+me\s+(?:to|about)\s+)(.+?)(?:\s+at\s+.+)?$/i.exec(text)
+  if (m && m[2]) content = m[2].trim()
 
   return {
     intent,
@@ -260,30 +262,44 @@ async function handler(
       let aiResponse: string
 
       if (parsed.intent === 'reminder') {
-        try {
-          const backendUrl = 'https://deploy-production-4105.up.railway.app'
-          const createRes = await fetch(`${backendUrl}/api/tasks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              token,
-              content: parsed.content || message,
-              type: 'Reminder',
-              priority: 'medium',
-              completed: false,
-              dueDate: parsed.dueDateISO, // may be undefined
-              tags: ['auto-from-chat'],
-            }),
-          })
-          const createData = await createRes.json()
-          if (createRes.ok && createData?.success) {
-            createdTask = createData.task || null
-            aiResponse = `Okay, I've created a reminder for you.${parsed.dueDateISO ? ` I'll remind you at ${new Date(parsed.dueDateISO).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : ''}`
+        // Ask for missing details instead of creating vague reminders
+        const missingWhat = !parsed.content || parsed.content.trim().length < 3 || /^(something|about\s+me)$/i.test(parsed.content.trim())
+        const missingWhen = !parsed.dueDateISO
+
+        if (missingWhat || missingWhen) {
+          if (missingWhat && missingWhen) {
+            aiResponse = "Got it. What should I remind you about, and when? For example: 'remind me to pay rent tomorrow at 6 pm'."
+          } else if (missingWhat) {
+            aiResponse = "Sure. What should I remind you about?"
           } else {
-            aiResponse = `I tried to create a reminder but the server responded with an error${createData?.error ? `: ${createData.error}` : '.'}`
+            aiResponse = "When should I remind you? You can say things like 'today at 6 pm' or 'tomorrow 9:30'."
           }
-        } catch (e: any) {
-          aiResponse = `I couldn't reach the task service to create a reminder. ${e?.message || ''}`.trim()
+        } else {
+          try {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
+            const createRes = await fetch(`${backendUrl}/api/tasks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                token,
+                content: parsed.content || message,
+                type: 'Reminder',
+                priority: 'medium',
+                completed: false,
+                dueDate: parsed.dueDateISO,
+                tags: ['auto-from-chat'],
+              }),
+            })
+            const createData = await createRes.json()
+            if (createRes.ok && createData?.success) {
+              createdTask = createData.task || null
+              aiResponse = `Okay, I've created a reminder for you. I'll remind you at ${new Date(parsed.dueDateISO!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
+            } else {
+              aiResponse = `I tried to create a reminder but the server responded with an error${createData?.error ? `: ${createData.error}` : '.'}`
+            }
+          } catch (e: any) {
+            aiResponse = `I couldn't reach the task service to create a reminder. ${e?.message || ''}`.trim()
+          }
         }
       } else {
         // Generate response using Gemini API with all conversation context

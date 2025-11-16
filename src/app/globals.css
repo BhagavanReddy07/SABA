@@ -131,6 +131,10 @@ html {
   animation: typing 0.6s infinite;
 }
 
+/* Simple delay utilities for typing dots */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+
 /* Pulse animation for loading */
 @keyframes pulse-soft {
   0%, 100% {

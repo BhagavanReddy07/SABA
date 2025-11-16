@@ -92,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const userId = getUserIdFromToken(token)
   if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
 
-  const { conversationId } = req.body as { conversationId?: string }
+  const { conversationId, lastN } = req.body as { conversationId?: string; lastN?: number }
   if (!conversationId) return res.status(400).json({ success: false, error: 'conversationId required' })
 
   // Only once per conversation
@@ -103,7 +103,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   const conv = getConversation(conversationId, userId)
   if (!conv) return res.status(404).json({ success: false, error: 'Conversation not found' })
 
-  const history = conv.messages.map(m => ({ role: m.role, content: m.content }))
+  // Limit scope to recent messages to avoid memorizing entire history unintentionally
+  const N = typeof lastN === 'number' && lastN > 0 ? Math.min(lastN, 100) : 20
+  const recent = conv.messages.slice(-N)
+  const history = recent.map(m => ({ role: m.role, content: m.content }))
 
   let points: string[] = []
 
@@ -112,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     try {
       const client = new GoogleGenerativeAI(apiKey)
       const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' })
-      const prompt = `Extract concise personal memory items from the following conversation between a user and an assistant. Focus on profile facts and stable preferences (name, age, likes, location, job, recurring preferences). Return each item as a single bullet line, no numbering, 1 sentence each, max 12 items. Avoid duplicates and trivial chit-chat.\n\n` +
+      const prompt = `Extract concise personal memory items from the following recent conversation snippets (last ${N} messages) between a user and an assistant. Focus on profile facts and stable preferences (name, age, likes, location, job, recurring preferences). Return each item as a single bullet line, no numbering, 1 sentence each, max 12 items. Avoid duplicates and trivial chit-chat. If nothing memorable, return an empty list.\n\n` +
         history.map(h => `${h.role === 'user' ? 'User' : 'SABA'}: ${h.content}`).join('\n')
       const result = await model.generateContent(prompt)
       const text = result.response.text() || ''

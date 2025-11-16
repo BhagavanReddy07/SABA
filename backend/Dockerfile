@@ -1,28 +1,35 @@
-# Use official Python 3.11 slim image
+# Use Python 3.11 slim for smaller base image
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy and install dependencies first for caching
-COPY requirements.txt .
+# Install system dependencies (minimal set)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install dependencies
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
-# Environment will be provided via Docker Compose or deployment platform
-# (If you need to bake envs in, mount or COPY a file explicitly in your own Docker build)
+# Set environment variables for model caching
+ENV TRANSFORMERS_CACHE=/app/models
+ENV HF_HOME=/app/models
+ENV SENTENCE_TRANSFORMERS_HOME=/app/models
 
-# Expose FastAPI port (use 5000 to match frontend proxy and app config)
+# Memory optimization environment variables
+ENV PYTHONUNBUFFERED=1
+ENV MALLOC_ARENA_MAX=2
+ENV PYTHONMALLOC=malloc
+ENV MALLOC_MMAP_THRESHOLD_=131072
+
+# Expose port
 EXPOSE 5000
 
-# Copy and make the start script executable
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
-
-# Start the application via start.sh (runs migrations then uvicorn)
-CMD ["/start.sh"]
+# Download models on startup, then run server
+CMD python download_models.py && python run_server.py

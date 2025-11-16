@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChatMessage } from "./chat-message"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Message, Conversation } from "@/lib/types"
 import { generateId } from "@/lib/utils"
 import { SendIcon, BrainCircuit } from "lucide-react"
@@ -217,9 +218,28 @@ export function ChatPanel({
                 <ChatMessage
                   key={message.id}
                   message={message}
-                  isLoading={isLoading && i === messages.length - 1}
+                  isLoading={false}
                 />
               ))}
+
+              {/* Assistant typing indicator while awaiting response */}
+              {isLoading && (
+                <div className="flex gap-3 w-full animate-fade-in justify-start">
+                  <Avatar className="h-8 w-8 shrink-0 mt-1">
+                    <AvatarImage src="/ai-avatar.svg" alt="SABA" />
+                    <AvatarFallback className="bg-primary/20">SA</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-1 max-w-3xl md:max-w-4xl">
+                    <div className="px-4 py-2 bg-muted text-muted-foreground rounded-md">
+                      <span className="inline-flex gap-1 align-middle">
+                        <span className="animate-typing inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
+                        <span className="animate-typing delay-100 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
+                        <span className="animate-typing delay-200 inline-block h-2 w-2 rounded-full bg-muted-foreground"></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={scrollRef} />
             </div>
           )}

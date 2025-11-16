@@ -1,0 +1,35 @@
+# Normalize line endings across the repo
+# Store LF in the repo by default, let Git auto-detect text files
+* text=auto
+
+# Enforce LF for cross-platform code and config
+*.js      text eol=lf
+*.jsx     text eol=lf
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.css     text eol=lf
+*.scss    text eol=lf
+*.md      text eol=lf
+*.html    text eol=lf
+*.sh      text eol=lf
+*Dockerfile* text eol=lf
+*.env     text eol=lf
+*.env.*   text eol=lf
+
+# Windows-specific scripts should keep CRLF for best compatibility
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# Images and other binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
