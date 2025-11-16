@@ -16,3 +16,4 @@ pinecone>=5.0.0
 spacy==3.7.6
 scikit-learn==1.5.2
 numpy==1.26.4
+passlib==1.7.4
