@@ -28,7 +28,7 @@ Defaults used in compose:
 - Frontend → Backend URL: `NEXT_PUBLIC_BACKEND_URL=http://backend:5000`
 - Backend DB: `postgres://saba:saba@postgres:5432/saba`
 - Backend Redis: `redis://redis:6379/0`
-- Email (optional): set `SENDGRID_API_KEY` to enable email sending
+- Email : set `SENDGRID_API_KEY` to enable email sending
 
 If you prefer running services natively, use the manual setup below.
 
