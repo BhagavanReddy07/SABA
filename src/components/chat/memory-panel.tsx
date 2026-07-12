@@ -52,7 +52,7 @@ export function MemoryPanel({
   return (
     <aside className="fixed inset-y-0 right-0 z-30 flex w-80 flex-col border-l border-edge bg-surface shadow-2xl lg:static lg:bg-surface/60 lg:shadow-none">
       <div className="flex items-center justify-between px-4 py-4">
-        <div className="grid flex-1 grid-cols-2 rounded-xl border border-edge bg-white/[0.03] p-1">
+        <div className="grid flex-1 grid-cols-2 rounded-xl border border-edge bg-wash/[0.03] p-1">
           {(
             [
               ['memory', 'Memory', Brain],
@@ -64,7 +64,7 @@ export function MemoryPanel({
               onClick={() => setTab(key)}
               className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition ${
                 tab === key
-                  ? 'bg-white/[0.08] text-slate-100'
+                  ? 'bg-wash/[0.08] text-slate-100'
                   : 'text-slate-500 hover:text-slate-300'
               }`}
             >
@@ -74,7 +74,7 @@ export function MemoryPanel({
         </div>
         <button
           onClick={onClose}
-          className="ml-2 rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-200 lg:hidden"
+          className="ml-2 rounded-lg p-1.5 text-slate-500 hover:bg-wash/[0.06] hover:text-slate-200 lg:hidden"
           aria-label="Close panel"
         >
           <X className="h-4 w-4" />

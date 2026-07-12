@@ -49,7 +49,7 @@ export default function LoginPage() {
         </Link>
 
         {/* Mode toggle */}
-        <div className="mb-6 grid grid-cols-2 rounded-xl border border-edge bg-white/[0.03] p-1">
+        <div className="mb-6 grid grid-cols-2 rounded-xl border border-edge bg-wash/[0.03] p-1">
           {(['login', 'signup'] as const).map((m) => (
             <button
               key={m}

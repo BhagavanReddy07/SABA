@@ -48,6 +48,14 @@ export async function getUserById(id: string): Promise<DbUser | null> {
   return rows[0] ? toUser(rows[0]) : null;
 }
 
+export async function updateUserName(id: string, name: string): Promise<DbUser> {
+  const { rows } = await pool.query(
+    `UPDATE users SET name = $2 WHERE id = $1 RETURNING *`,
+    [id, name]
+  );
+  return toUser(rows[0]);
+}
+
 // --- Conversations ---
 
 function toConversation(row: any): Conversation {

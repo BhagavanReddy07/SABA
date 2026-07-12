@@ -89,7 +89,7 @@ export default function LandingPage() {
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-10 md:pt-20">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
-            <p className="animate-fade-up mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-white/[0.04] px-3 py-1 text-xs text-slate-400">
+            <p className="animate-fade-up mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-wash/[0.04] px-3 py-1 text-xs text-slate-400">
               <span className="h-1.5 w-1.5 animate-pulse-glow rounded-full bg-emerald-400" />
               3-tier memory architecture
             </p>
@@ -166,7 +166,7 @@ export default function LandingPage() {
             {PIPELINE.map((step, i) => (
               <div key={step.title} className="animate-float-slow" style={{ animationDelay: `${i * 600}ms` }}>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-white/[0.06] p-2">
+                  <div className="rounded-lg bg-wash/[0.06] p-2">
                     <step.icon className="h-5 w-5 text-violet-300" />
                   </div>
                   <span className="font-display font-semibold">
@@ -186,7 +186,7 @@ export default function LandingPage() {
           {STACK.map((tech) => (
             <span
               key={tech}
-              className="rounded-full border border-edge bg-white/[0.03] px-3 py-1 text-xs text-slate-400"
+              className="rounded-full border border-edge bg-wash/[0.03] px-3 py-1 text-xs text-slate-400"
             >
               {tech}
             </span>

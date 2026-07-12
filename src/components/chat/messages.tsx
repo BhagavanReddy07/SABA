@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { BrainCircuit, ChevronDown, Sparkles } from 'lucide-react';
-import type { Message, MemoryTrace } from '@/lib/types';
+import { useEffect, useRef } from 'react';
+import { Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import type { Components } from 'react-markdown';
+import type { Message } from '@/lib/types';
 
 export function Messages({ messages, thinking }: { messages: Message[]; thinking: boolean }) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -22,6 +26,26 @@ export function Messages({ messages, thinking }: { messages: Message[]; thinking
   );
 }
 
+const MARKDOWN_COMPONENTS: Components = {
+  p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+  strong: ({ node, ...props }) => <strong className="font-semibold text-slate-100" {...props} />,
+  ul: ({ node, ...props }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0" {...props} />,
+  ol: ({ node, ...props }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0" {...props} />,
+  li: ({ node, ...props }) => <li {...props} />,
+  a: ({ node, ...props }) => (
+    <a className="text-violet-300 underline hover:text-violet-200" target="_blank" rel="noreferrer" {...props} />
+  ),
+  code: ({ node, className, ...props }) =>
+    className?.includes('language-') ? (
+      <code className="mb-2 block overflow-x-auto rounded-lg bg-wash/[0.08] p-3 text-xs last:mb-0" {...props} />
+    ) : (
+      <code className="rounded bg-wash/[0.12] px-1 py-0.5 text-[0.85em]" {...props} />
+    ),
+  h1: ({ node, ...props }) => <h3 className="mb-1 mt-2 text-base font-semibold first:mt-0" {...props} />,
+  h2: ({ node, ...props }) => <h3 className="mb-1 mt-2 text-base font-semibold first:mt-0" {...props} />,
+  h3: ({ node, ...props }) => <h3 className="mb-1 mt-2 text-sm font-semibold first:mt-0" {...props} />,
+};
+
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   return (
@@ -33,76 +57,21 @@ function MessageBubble({ message }: { message: Message }) {
       )}
       <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
         <div
-          className={`inline-block whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-sm leading-relaxed ${
+          className={`inline-block rounded-2xl px-4 py-3 text-left text-sm leading-relaxed ${
             isUser
-              ? 'rounded-br-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white'
+              ? 'rounded-br-md whitespace-pre-wrap bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white'
               : 'glass rounded-bl-md text-slate-200'
           }`}
         >
-          {message.content}
+          {isUser ? (
+            message.content
+          ) : (
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={MARKDOWN_COMPONENTS}>
+              {message.content}
+            </ReactMarkdown>
+          )}
         </div>
-        {!isUser && message.memoryTrace && <TraceChip trace={message.memoryTrace} />}
       </div>
-    </div>
-  );
-}
-
-/** Shows what the assistant recalled to write this reply — the 3 tiers, visible. */
-function TraceChip({ trace }: { trace: MemoryTrace }) {
-  const [open, setOpen] = useState(false);
-  const recalled =
-    trace.workingMemory + trace.episodic.length + trace.semantic.length;
-  if (recalled === 0) return null;
-
-  return (
-    <div className="mt-1.5">
-      <button
-        onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-500 transition hover:text-slate-300"
-      >
-        <BrainCircuit className="h-3 w-3 text-violet-400" />
-        {trace.workingMemory} in window · {trace.episodic.length} facts ·{' '}
-        {trace.semantic.length} recalled
-        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="glass mt-2 space-y-3 rounded-xl p-3 text-left text-xs">
-          <div>
-            <p className="mb-1 font-semibold text-cyan-300">Tier 1 · Working memory (Redis)</p>
-            <p className="text-slate-400">
-              {trace.workingMemory} recent message{trace.workingMemory === 1 ? '' : 's'} in the
-              conversation window.
-            </p>
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-violet-300">Tier 2 · Episodic facts (Postgres)</p>
-            {trace.episodic.length === 0 ? (
-              <p className="text-slate-500">Nothing learned yet.</p>
-            ) : (
-              <ul className="space-y-0.5 text-slate-400">
-                {trace.episodic.map((f, i) => (
-                  <li key={i}>• {f}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-fuchsia-300">Tier 3 · Semantic recall (Pinecone)</p>
-            {trace.semantic.length === 0 ? (
-              <p className="text-slate-500">No similar past moments found.</p>
-            ) : (
-              <ul className="space-y-0.5 text-slate-400">
-                {trace.semantic.map((s, i) => (
-                  <li key={i}>
-                    • “{s.content}”{' '}
-                    <span className="text-slate-600">({Math.round(s.score * 100)}%)</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

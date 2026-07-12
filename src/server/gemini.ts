@@ -3,8 +3,13 @@
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-// Tried in order; free-tier rate limits differ per model.
-const CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+// Tried in order; flash-lite first for latency, falling back to fuller models
+// if it's rate-limited or unavailable.
+const CHAT_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+
+// A hung request shouldn't block the whole fallback chain — fail fast and try the next model.
+const CHAT_TIMEOUT_MS = 12_000;
+const EMBED_TIMEOUT_MS = 8_000;
 
 export const EMBEDDING_MODEL = 'gemini-embedding-001';
 export const EMBEDDING_DIM = 768;
@@ -37,6 +42,7 @@ export async function generateText(
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body,
+        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
       });
       if (!res.ok) {
         lastError = new Error(`${model}: HTTP ${res.status}`);
@@ -75,6 +81,7 @@ export async function embed(text: string): Promise<number[]> {
       content: { parts: [{ text: text.slice(0, 8000) }] },
       outputDimensionality: EMBEDDING_DIM,
     }),
+    signal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Embedding failed: HTTP ${res.status}`);
   const data = await res.json();

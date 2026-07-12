@@ -214,6 +214,7 @@ export default function ChatPage() {
         onNew={newChat}
         onDelete={deleteConversation}
         onLogout={logout}
+        onUserUpdate={setUser}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -227,7 +228,7 @@ export default function ChatPage() {
           </div>
           <button
             onClick={() => setPanelOpen(!panelOpen)}
-            className={`rounded-lg p-2 transition hover:bg-white/[0.06] ${
+            className={`rounded-lg p-2 transition hover:bg-wash/[0.06] ${
               panelOpen ? 'text-violet-300' : 'text-slate-500'
             }`}
             aria-label="Toggle memory panel"
@@ -255,7 +256,7 @@ export default function ChatPage() {
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="glass rounded-xl px-4 py-3 text-left text-xs text-slate-400 transition hover:bg-white/[0.08] hover:text-slate-200"
+                    className="glass rounded-xl px-4 py-3 text-left text-xs text-slate-400 transition hover:bg-wash/[0.08] hover:text-slate-200"
                   >
                     {s}
                   </button>
