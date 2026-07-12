@@ -54,8 +54,8 @@ Follow these steps in order — they work on Windows, macOS, and Linux.
 ### Step 2 — Get the code
 
 ```bash
-git clone https://github.com/BhagavanReddy07/saba.git
-cd saba
+git clone https://github.com/BhagavanReddy07/SABA.git
+cd SABA
 npm install
 ```
 
