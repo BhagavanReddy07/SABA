@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: saba-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saba
+      POSTGRES_PASSWORD: saba_password
+      POSTGRES_DB: saba
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saba -d saba"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: saba-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    ports:
+      # host port 6380 to avoid clashing with a locally installed Redis
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
