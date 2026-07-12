@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MessageSquarePlus, Sparkles, Trash2 } from 'lucide-react';
 import type { Conversation, User } from '@/lib/types';
+import type { ThemeMode } from '@/lib/use-theme';
 import { SettingsModal } from '@/components/settings/settings-modal';
 
 type Props = {
@@ -14,6 +15,8 @@ type Props = {
   onDelete: (id: string) => void;
   onLogout: () => void;
   onUserUpdate: (user: User) => void;
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
 };
 
 export function Sidebar({
@@ -25,6 +28,8 @@ export function Sidebar({
   onDelete,
   onLogout,
   onUserUpdate,
+  themeMode,
+  onThemeChange,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
@@ -77,6 +82,8 @@ export function Sidebar({
           user={user}
           onUserUpdate={onUserUpdate}
           onLogout={onLogout}
+          themeMode={themeMode}
+          onThemeChange={onThemeChange}
         />
         <button
           onClick={() => setSettingsOpen((v) => !v)}

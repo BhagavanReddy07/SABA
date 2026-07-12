@@ -15,6 +15,7 @@ import { Sidebar } from '@/components/chat/sidebar';
 import { Messages } from '@/components/chat/messages';
 import { Composer } from '@/components/chat/composer';
 import { MemoryPanel } from '@/components/chat/memory-panel';
+import { useTheme } from '@/lib/use-theme';
 
 const STARTERS = [
   'Hi! My name is …, and I love …',
@@ -33,6 +34,7 @@ export default function ChatPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [thinking, setThinking] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
+  const { mode: themeMode, setMode: setThemeMode, light } = useTheme();
 
   // --- Bootstrap: auth check + initial data ---
   useEffect(() => {
@@ -205,7 +207,8 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    // `light` here scopes the theme to the chat page — landing/login stay dark.
+    <div className={`flex h-screen overflow-hidden bg-ink text-slate-200 transition-colors duration-300 ${light ? 'light' : ''}`}>
       <Sidebar
         user={user}
         conversations={conversations}
@@ -215,6 +218,8 @@ export default function ChatPage() {
         onDelete={deleteConversation}
         onLogout={logout}
         onUserUpdate={setUser}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">

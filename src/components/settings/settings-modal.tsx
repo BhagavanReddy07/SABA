@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, LogOut, X } from 'lucide-react';
 import type { User } from '@/lib/types';
-import { useTheme } from '@/lib/use-theme';
+import type { ThemeMode } from '@/lib/use-theme';
 import { ThemeModeSlider } from './theme-slider';
 
 type Props = {
@@ -12,11 +12,20 @@ type Props = {
   user: User;
   onUserUpdate: (user: User) => void;
   onLogout: () => void;
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
 };
 
 /** Anchored popover (like Claude's account menu) — render inside a `relative` wrapper near its trigger. */
-export function SettingsModal({ open, onClose, user, onUserUpdate, onLogout }: Props) {
-  const { mode, setMode } = useTheme();
+export function SettingsModal({
+  open,
+  onClose,
+  user,
+  onUserUpdate,
+  onLogout,
+  themeMode,
+  onThemeChange,
+}: Props) {
   const [name, setName] = useState(user.name);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -128,7 +137,7 @@ export function SettingsModal({ open, onClose, user, onUserUpdate, onLogout }: P
           Appearance
         </h3>
         <div className="flex justify-center">
-          <ThemeModeSlider mode={mode} onChange={setMode} />
+          <ThemeModeSlider mode={themeMode} onChange={onThemeChange} />
         </div>
       </section>
 

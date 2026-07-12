@@ -6,34 +6,31 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 const KEY = 'saba-theme';
 
-function apply(mode: ThemeMode) {
-  const isDark =
-    mode === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : mode === 'dark';
-  document.documentElement.classList.toggle('light', !isDark);
-}
-
-/** Persists to localStorage, applies to <html>, and tracks OS changes while on 'system'. */
+/**
+ * Theme preference, persisted to localStorage and tracking OS changes while on
+ * 'system'. Scoped, not global: put the returned `light` flag as a `light`
+ * class on the subtree that should be themed (chat only — landing/login stay dark).
+ */
 export function useTheme() {
   const [mode, setModeState] = useState<ThemeMode>('system');
+  const [systemDark, setSystemDark] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem(KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') setModeState(stored);
-  }, []);
 
-  useEffect(() => {
-    apply(mode);
-    if (mode !== 'system') return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => apply('system');
+    setSystemDark(mq.matches);
+    const onChange = () => setSystemDark(mq.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, [mode]);
+  }, []);
 
   const setMode = useCallback((next: ThemeMode) => {
     localStorage.setItem(KEY, next);
     setModeState(next);
   }, []);
 
-  return { mode, setMode };
+  const light = mode === 'system' ? !systemDark : mode === 'light';
+  return { mode, setMode, light };
 }

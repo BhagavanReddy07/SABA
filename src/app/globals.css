@@ -20,7 +20,8 @@
   --slate-600: 71 85 105;
 }
 
-:root.light {
+/* Scoped, not :root — light mode is opt-in per page subtree (chat only). */
+.light {
   color-scheme: light;
 
   --ink: 248 249 251;
