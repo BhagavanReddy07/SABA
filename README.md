@@ -174,6 +174,13 @@ start `npm start`, same env vars. Render's free Postgres works too (expires afte
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
 
+## Contributing
+
+Contributions are welcome! The flow: fork/clone → branch → PR → owner review →
+merge to `main` auto-deploys to production. Every PR gets an automatic Vercel
+preview deployment and must pass CI (typecheck + lint + build).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
 ## Troubleshooting
 
 | Problem | Fix |
