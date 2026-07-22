@@ -16,12 +16,15 @@ const globalForRedis = globalThis as unknown as {
 };
 
 async function getClient(): Promise<RedisClientType | null> {
+  // No REDIS_URL (e.g. free hosting without Redis) → skip Tier 1 entirely;
+  // the Postgres fallback in getWindow covers it with zero connect latency.
+  if (!process.env.REDIS_URL) return null;
   if (globalForRedis.redisClient?.isReady) return globalForRedis.redisClient;
   if (!globalForRedis.redisConnecting) {
     globalForRedis.redisConnecting = (async () => {
       try {
         const client = createClient({
-          url: process.env.REDIS_URL ?? 'redis://localhost:6380',
+          url: process.env.REDIS_URL,
           socket: { connectTimeout: 2000, reconnectStrategy: (n) => (n > 3 ? false : 500) },
         }) as RedisClientType;
         client.on('error', () => {}); // logged once below; don't spam per-command

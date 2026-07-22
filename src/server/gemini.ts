@@ -59,6 +59,87 @@ export async function generateText(
   throw lastError ?? new Error('All Gemini models failed');
 }
 
+/**
+ * Streamed generation — yields text chunks as Gemini produces them.
+ * Same model fallback chain as generateText: if a model errors before
+ * yielding anything, the next one is tried.
+ */
+export async function* generateTextStream(
+  systemInstruction: string,
+  userPrompt: string,
+  options: { temperature?: number; maxOutputTokens?: number } = {}
+): AsyncGenerator<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+
+  const body = JSON.stringify({
+    system_instruction: { parts: [{ text: systemInstruction }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: options.temperature ?? 0.7,
+      maxOutputTokens: options.maxOutputTokens ?? 1024,
+    },
+  });
+
+  let lastError: unknown;
+  for (const model of CHAT_MODELS) {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/models/${model}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body,
+        // Whole-generation ceiling; also keeps us inside free-tier function limits.
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+    if (!res.ok || !res.body) {
+      lastError = new Error(`${model}: HTTP ${res.status}`);
+      continue;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let yielded = false;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const json = line.slice(5).trim();
+          if (!json) continue;
+          try {
+            const text: string | undefined =
+              JSON.parse(json)?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              yielded = true;
+              yield text;
+            }
+          } catch {
+            // ignore malformed keep-alive chunks
+          }
+        }
+      }
+    } catch (err) {
+      // Mid-stream failure after partial output: stop here, caller keeps partial text.
+      if (yielded) return;
+      lastError = err;
+      continue;
+    }
+    if (yielded) return;
+    lastError = new Error(`${model}: empty stream`);
+  }
+  throw lastError ?? new Error('All Gemini models failed');
+}
+
 /** Ask for JSON and parse it, stripping markdown fences if the model adds them. */
 export async function generateJson<T>(
   systemInstruction: string,

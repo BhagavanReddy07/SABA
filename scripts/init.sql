@@ -48,6 +48,17 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_user
   ON memories (user_id, created_at DESC);
 
+-- Remove duplicate facts stored before the unique index existed (keeps the oldest).
+DELETE FROM memories a USING memories b
+  WHERE a.user_id = b.user_id
+    AND rtrim(lower(a.content), ' .!') = rtrim(lower(b.content), ' .!')
+    AND (a.created_at > b.created_at
+         OR (a.created_at = b.created_at AND a.id > b.id));
+
+-- One copy of each fact per user, ignoring case and trailing punctuation.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_user_content_uniq
+  ON memories (user_id, rtrim(lower(content), ' .!'));
+
 CREATE TABLE IF NOT EXISTS tasks (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

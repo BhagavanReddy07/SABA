@@ -97,6 +97,18 @@ export async function getConversation(
   return rows[0] ? toConversation(rows[0]) : null;
 }
 
+export async function renameConversation(
+  id: string,
+  userId: string,
+  title: string
+): Promise<Conversation | null> {
+  const { rows } = await pool.query(
+    `UPDATE conversations SET title = $3 WHERE id = $1 AND user_id = $2 RETURNING *`,
+    [id, userId, title]
+  );
+  return rows[0] ? toConversation(rows[0]) : null;
+}
+
 export async function touchConversation(id: string): Promise<void> {
   await pool.query(`UPDATE conversations SET updated_at = now() WHERE id = $1`, [id]);
 }
@@ -166,18 +178,32 @@ function toMemory(row: any): Memory {
   };
 }
 
+/**
+ * Inserts a fact unless the user already has it (unique index on
+ * user_id + content, case/punctuation-insensitive). Returns the existing
+ * row on a duplicate so callers always get the canonical memory.
+ */
 export async function saveMemory(
   userId: string,
   content: string,
   category: Memory['category'],
   source: Memory['source']
 ): Promise<Memory> {
+  const normalized = content.trim().replace(/\s+/g, ' ');
   const { rows } = await pool.query(
     `INSERT INTO memories (user_id, content, category, source)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [userId, content, category, source]
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, rtrim(lower(content), ' .!')) DO NOTHING
+     RETURNING *`,
+    [userId, normalized, category, source]
   );
-  return toMemory(rows[0]);
+  if (rows[0]) return toMemory(rows[0]);
+  const { rows: existing } = await pool.query(
+    `SELECT * FROM memories
+     WHERE user_id = $1 AND rtrim(lower(content), ' .!') = rtrim(lower($2), ' .!')`,
+    [userId, normalized]
+  );
+  return toMemory(existing[0]);
 }
 
 export async function listMemories(userId: string): Promise<Memory[]> {

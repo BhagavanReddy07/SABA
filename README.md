@@ -20,10 +20,23 @@ builds on the last.
 1. **Recall** — all three tiers are queried in parallel: the recent conversation
    window (Redis), durable facts about the user (Postgres), and semantically
    similar moments from any past conversation (Pinecone, via Gemini embeddings).
-2. **Generate** — Gemini answers with all of that context in its system prompt.
+2. **Generate** — Gemini **streams** the answer token by token (SSE) with all of
+   that context in its system prompt.
 3. **Remember** — the exchange is persisted to Postgres, appended to the Redis
    window, embedded into Pinecone, and mined for new durable facts — asynchronously,
    off the response path.
+
+**Beyond memory:**
+
+- **Smart actions** — say *“play Take Five on Spotify”*, *“open the Dune trailer”,*
+  or *“write a mail to…”* and SABA opens the right app in a new tab (deep links —
+  no extra APIs, no cost).
+- **AI conversation titles** — chats name themselves after the first exchange.
+- **Voice input & read-aloud** — Web Speech API, right in the browser.
+- **Memory trace** — a brain chip under each reply shows exactly what was recalled
+  from each tier, with similarity scores.
+- **Search, rename, date-grouped history, Markdown export, Ctrl+K, mobile drawer,
+  light/dark themes.**
 
 Every tier **degrades gracefully**: no Redis → the window is rebuilt from Postgres;
 no Pinecone or Gemini key → the app still chats (demo mode). Each assistant reply
@@ -121,6 +134,30 @@ Create an account and start chatting.
 4. Click the small **brain chip** under any reply to see what each tier recalled.
 
 ---
+
+## Deploying for free
+
+Everything SABA needs has a free tier. Recommended stack: **Vercel + Neon**.
+
+1. **Postgres — [Neon](https://neon.tech)** (free): create a project, copy the
+   **pooled** connection string (the one with `-pooler` in the host, ending in
+   `?sslmode=require`).
+2. **Create the tables** — from your machine, point the init script at Neon:
+   set `DATABASE_URL` in `.env` to the Neon URL, then run `npm run db:init`.
+3. **App — [Vercel](https://vercel.com)** (free): import the GitHub repo
+   (framework auto-detected as Next.js) and add these environment variables:
+   - `DATABASE_URL` — the Neon pooled URL
+   - `AUTH_SECRET` — any long random string
+   - `GEMINI_API_KEY` — free at https://aistudio.google.com/apikey
+   - `PINECONE_API_KEY` + `PINECONE_INDEX=saba-memory` — free at https://app.pinecone.io
+   - **Do not set `REDIS_URL`** — Tier 1 falls back to Postgres automatically.
+     (Want it anyway? [Upstash](https://upstash.com) has a free Redis and its
+     `redis://` URL drops straight in.)
+4. Deploy. Done — no Docker in production.
+
+Also works on **Render** (free web service): build `npm install && npm run build`,
+start `npm start`, same env vars. Render's free Postgres works too (expires after
+30 days — Neon doesn't, so prefer Neon).
 
 ## All commands
 

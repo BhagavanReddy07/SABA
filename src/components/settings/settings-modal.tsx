@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, LogOut, X } from 'lucide-react';
+import { Brain, Check, ChevronRight, Loader2, LogOut, X } from 'lucide-react';
 import type { User } from '@/lib/types';
 import type { ThemeMode } from '@/lib/use-theme';
 import { ThemeModeSlider } from './theme-slider';
@@ -14,6 +14,8 @@ type Props = {
   onLogout: () => void;
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
+  memoryCount: number;
+  onOpenMemory: () => void;
 };
 
 /** Anchored popover (like Claude's account menu) — render inside a `relative` wrapper near its trigger. */
@@ -25,6 +27,8 @@ export function SettingsModal({
   onLogout,
   themeMode,
   onThemeChange,
+  memoryCount,
+  onOpenMemory,
 }: Props) {
   const [name, setName] = useState(user.name);
   const [saving, setSaving] = useState(false);
@@ -129,6 +133,29 @@ export function SettingsModal({
           <label className="mb-1.5 block text-xs font-medium text-slate-400">Email</label>
           <p className="input-dark !cursor-not-allowed text-slate-500">{user.email}</p>
         </div>
+      </section>
+
+      {/* Memory */}
+      <section className="mt-5 border-t border-edge pt-5">
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Memory
+        </h3>
+        <button
+          onClick={() => {
+            onClose();
+            onOpenMemory();
+          }}
+          className="flex w-full items-center gap-3 rounded-xl border border-edge bg-wash/[0.03] px-3 py-2.5 text-left transition hover:bg-wash/[0.07]"
+        >
+          <Brain className="h-4 w-4 shrink-0 text-violet-300" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-slate-200">What SABA knows about you</p>
+            <p className="text-xs text-slate-500">
+              {memoryCount} {memoryCount === 1 ? 'memory' : 'memories'} stored
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
+        </button>
       </section>
 
       {/* Appearance */}

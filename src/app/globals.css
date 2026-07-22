@@ -18,6 +18,8 @@
   --slate-400: 148 163 184;
   --slate-500: 100 116 139;
   --slate-600: 71 85 105;
+
+  --aurora-opacity: 1;
 }
 
 /* Scoped, not :root — light mode is opt-in per page subtree (chat only). */
@@ -36,6 +38,8 @@
   --slate-400: 71 85 105;
   --slate-500: 100 116 139;
   --slate-600: 148 163 184;
+
+  --aurora-opacity: 0.35;
 }
 
 body {
@@ -65,12 +69,27 @@ body {
     @apply border border-edge bg-wash/[0.04] backdrop-blur-xl;
   }
 
+  /* Elevated glass — inner highlight + deep soft shadow, reads as a 3D pane */
+  .glass-deep {
+    @apply border border-edge bg-wash/[0.05] backdrop-blur-2xl;
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
+      0 20px 50px -24px rgba(0, 0, 0, 0.7),
+      0 8px 24px -16px rgba(139, 92, 246, 0.25);
+  }
+  .light .glass-deep {
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.7),
+      0 20px 50px -28px rgba(15, 23, 42, 0.25),
+      0 8px 24px -16px rgba(139, 92, 246, 0.15);
+  }
+
   .text-gradient {
     @apply bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:brightness-110 hover:shadow-violet-700/40 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
   }
 
   .btn-ghost {
@@ -80,6 +99,67 @@ body {
   .input-dark {
     @apply w-full rounded-xl border border-edge bg-wash/[0.05] px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20;
   }
+
+  /* Icon-sized ghost button used across toolbars */
+  .btn-icon {
+    @apply inline-flex items-center justify-center rounded-lg p-1.5 text-slate-500 transition hover:bg-wash/[0.08] hover:text-slate-200 disabled:pointer-events-none disabled:opacity-40;
+  }
+}
+
+/* --- Aurora background (pure CSS, GPU-cheap: two blurred blobs drifting) --- */
+
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--aurora-opacity);
+}
+.aurora::before,
+.aurora::after {
+  content: '';
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 9999px;
+  filter: blur(90px);
+  will-change: transform;
+}
+.aurora::before {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.28), transparent 65%);
+  top: -20%;
+  left: -10%;
+  animation: aurora-a 26s ease-in-out infinite alternate;
+}
+.aurora::after {
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.16), transparent 65%);
+  bottom: -25%;
+  right: -15%;
+  animation: aurora-b 32s ease-in-out infinite alternate;
+}
+@keyframes aurora-a {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(18vw, 12vh) scale(1.15); }
+}
+@keyframes aurora-b {
+  from { transform: translate(0, 0) scale(1.1); }
+  to { transform: translate(-14vw, -10vh) scale(0.95); }
+}
+
+/* Faint perspective grid floor for hero sections */
+.grid-floor {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(139, 92, 246, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.14) 1px, transparent 1px);
+  background-size: 44px 44px;
+  transform: perspective(600px) rotateX(62deg);
+  transform-origin: bottom;
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 85%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent 85%);
 }
 
 /* --- Animations --- */
@@ -128,6 +208,26 @@ body {
   }
 }
 
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
 .animate-fade-up {
   animation: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -139,6 +239,28 @@ body {
 }
 .typing-dot {
   animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+/* Blinking block caret shown while a reply is streaming in */
+.stream-caret::after {
+  content: '▍';
+  margin-left: 2px;
+  color: rgb(167 139 250);
+  animation: caret-blink 0.9s step-end infinite;
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    110deg,
+    rgb(var(--slate-500)) 40%,
+    rgb(var(--slate-100)) 50%,
+    rgb(var(--slate-500)) 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.2s linear infinite;
 }
 
 /* 3D tilt cards (pure CSS — no JS) */
@@ -161,7 +283,13 @@ body {
   .animate-fade-up,
   .animate-float-slow,
   .animate-pulse-glow,
-  .typing-dot {
+  .typing-dot,
+  .text-shimmer,
+  .aurora::before,
+  .aurora::after {
+    animation: none;
+  }
+  .stream-caret::after {
     animation: none;
   }
   .tilt-scene:hover .tilt-card {

@@ -3,10 +3,16 @@ import {
   ArrowRight,
   BrainCircuit,
   Database,
+  Download,
   Github,
   Layers,
   MessageSquareText,
+  Mic,
+  Moon,
+  Rocket,
+  ScanSearch,
   Sparkles,
+  Volume2,
   Waypoints,
   Zap,
 } from 'lucide-react';
@@ -45,7 +51,7 @@ const PIPELINE = [
   {
     icon: MessageSquareText,
     title: 'Generate',
-    body: 'Gemini answers with your history, facts, and semantically similar moments in context.',
+    body: 'Gemini streams the answer token by token, with your history, facts, and similar past moments in context.',
   },
   {
     icon: Layers,
@@ -54,14 +60,22 @@ const PIPELINE = [
   },
 ];
 
-const STACK = ['Next.js 15', 'TypeScript', 'PostgreSQL', 'Redis', 'Pinecone', 'Gemini', 'Tailwind CSS', 'Docker'];
+const FEATURES = [
+  { icon: Zap, title: 'Streaming replies', body: 'Answers appear word by word, the moment generation starts.' },
+  { icon: ScanSearch, title: 'Memory trace', body: 'Every reply shows exactly what was recalled from each tier.' },
+  { icon: Rocket, title: 'Smart actions', body: '“Play it on Spotify”, “open the trailer”, “write a mail” — SABA opens the right app for you.' },
+  { icon: Mic, title: 'Voice input', body: 'Talk instead of typing — right in the browser, no plugins.' },
+  { icon: Volume2, title: 'Read aloud', body: 'Any reply can be spoken back to you with one click.' },
+  { icon: Download, title: 'Export chats', body: 'Download any conversation as clean Markdown.' },
+  { icon: Moon, title: 'Light & dark', body: 'A theme system that follows your OS — or your mood.' },
+];
+
+const STACK = ['Next.js 15', 'TypeScript', 'PostgreSQL', 'Redis', 'Pinecone', 'Gemini', 'Tailwind CSS'];
 
 export default function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Ambient glows */}
-      <div className="pointer-events-none absolute -top-40 left-1/4 h-[480px] w-[480px] rounded-full bg-violet-600/20 blur-[140px]" />
-      <div className="pointer-events-none absolute top-1/3 -right-24 h-[420px] w-[420px] rounded-full bg-cyan-500/10 blur-[120px]" />
+      <div className="aurora" />
 
       {/* Nav */}
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
@@ -87,11 +101,12 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-10 md:pt-20">
+        <div className="grid-floor" aria-hidden />
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div>
             <p className="animate-fade-up mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-wash/[0.04] px-3 py-1 text-xs text-slate-400">
               <span className="h-1.5 w-1.5 animate-pulse-glow rounded-full bg-emerald-400" />
-              3-tier memory architecture
+              3-tier memory · streams live
             </p>
             <h1
               className="animate-fade-up font-display text-4xl font-bold leading-tight tracking-tight md:text-6xl"
@@ -117,9 +132,29 @@ export default function LandingPage() {
                 How the memory works
               </a>
             </div>
+            <div
+              className="animate-fade-up mt-10 flex flex-wrap gap-x-8 gap-y-3"
+              style={{ animationDelay: '320ms' }}
+            >
+              {[
+                ['3', 'memory tiers'],
+                ['∞', 'cross-chat recall'],
+                ['$0', 'to run — all free tiers'],
+              ].map(([stat, label]) => (
+                <div key={label}>
+                  <p className="font-display text-2xl font-bold text-slate-100">{stat}</p>
+                  <p className="text-xs text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="animate-fade-up relative h-[340px] md:h-[460px]" style={{ animationDelay: '200ms' }}>
-            <NeuralCanvas className="h-full w-full" />
+          <div
+            className="animate-fade-up relative h-[340px] md:h-[460px]"
+            style={{ animationDelay: '200ms' }}
+          >
+            {/* Glow ring behind the globe */}
+            <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/20 blur-[90px]" />
+            <NeuralCanvas className="relative h-full w-full" />
           </div>
         </div>
       </section>
@@ -136,7 +171,7 @@ export default function LandingPage() {
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {TIERS.map((tier) => (
             <div key={tier.title} className="tilt-scene">
-              <div className="tilt-card glass h-full rounded-2xl p-6">
+              <div className="tilt-card glass-deep h-full rounded-2xl p-6">
                 <div className="tilt-pop">
                   <div
                     className={`mb-4 inline-flex rounded-xl bg-gradient-to-br p-3 ${tier.accent}`}
@@ -157,14 +192,18 @@ export default function LandingPage() {
 
       {/* Pipeline */}
       <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
-        <div className="glass rounded-3xl p-8 md:p-12">
+        <div className="glass-deep rounded-3xl p-8 md:p-12">
           <h2 className="font-display text-2xl font-bold tracking-tight md:text-3xl">
             Every message runs the loop:{' '}
             <span className="text-gradient">recall → generate → remember</span>
           </h2>
           <div className="mt-8 grid gap-8 md:grid-cols-3">
             {PIPELINE.map((step, i) => (
-              <div key={step.title} className="animate-float-slow" style={{ animationDelay: `${i * 600}ms` }}>
+              <div
+                key={step.title}
+                className="animate-float-slow"
+                style={{ animationDelay: `${i * 600}ms` }}
+              >
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-wash/[0.06] p-2">
                     <step.icon className="h-5 w-5 text-violet-300" />
@@ -177,6 +216,44 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Feature grid */}
+      <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
+        <h2 className="font-display text-2xl font-bold tracking-tight md:text-3xl">
+          Built like a product, <span className="text-gradient">not a demo</span>
+        </h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="glass rounded-2xl p-5 transition hover:-translate-y-1 hover:bg-wash/[0.06] hover:shadow-xl hover:shadow-violet-900/20"
+            >
+              <f.icon className="h-5 w-5 text-violet-300" />
+              <h3 className="mt-3 font-display text-sm font-semibold text-slate-100">
+                {f.title}
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="relative z-10 mx-auto max-w-6xl px-6 pb-24 text-center">
+        <div className="glass-deep relative overflow-hidden rounded-3xl px-8 py-14">
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-violet-600/25 blur-[100px]" />
+          <h2 className="font-display text-3xl font-bold tracking-tight">
+            Tell it once. <span className="text-gradient">It remembers forever.</span>
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-slate-400">
+            Create an account and introduce yourself — then start a brand-new conversation
+            and ask what it remembers.
+          </p>
+          <Link href="/login" className="btn-primary mt-8">
+            Try SABA free <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 

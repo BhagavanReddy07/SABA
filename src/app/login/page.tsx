@@ -39,10 +39,10 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
-      <div className="pointer-events-none absolute -top-32 left-1/3 h-[420px] w-[420px] rounded-full bg-violet-600/20 blur-[130px]" />
-      <div className="pointer-events-none absolute bottom-0 right-1/4 h-[360px] w-[360px] rounded-full bg-cyan-500/10 blur-[120px]" />
+      <div className="aurora" />
+      <div className="grid-floor" aria-hidden />
 
-      <div className="animate-fade-up glass relative z-10 w-full max-w-md rounded-3xl p-8">
+      <div className="animate-fade-up glass-deep relative z-10 w-full max-w-md rounded-3xl p-8">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2 font-display text-2xl font-bold">
           <Sparkles className="h-6 w-6 text-violet-400" />
           <span className="text-gradient">SABA</span>

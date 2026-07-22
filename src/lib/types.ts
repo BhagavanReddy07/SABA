@@ -22,7 +22,15 @@ export type Message = {
   createdAt: string;
   /** What the assistant recalled to produce this reply (assistant messages only). */
   memoryTrace?: MemoryTrace;
+  /** External action the reply wants to open (Spotify, YouTube, mail, …) — transient, not persisted. */
+  action?: ChatAction;
 };
+
+/** A deep link into an external app, produced by the assistant when asked to play/open/compose something. */
+export type ChatAction =
+  | { type: 'youtube'; query: string; videoId?: string }
+  | { type: 'spotify' | 'maps' | 'search'; query: string }
+  | { type: 'mail'; to?: string; subject?: string; body?: string };
 
 export type MemoryCategory = 'fact' | 'preference' | 'goal' | 'summary';
 
@@ -54,8 +62,9 @@ export type MemoryTrace = {
   semantic: { content: string; score: number }[];
 };
 
-export type ChatResponse = {
-  conversationId: string;
-  title: string;
-  message: Message;
-};
+/** Events streamed from POST /api/chat as server-sent events. */
+export type ChatStreamEvent =
+  | { type: 'start'; conversationId: string; title: string; trace: MemoryTrace }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; message: Message }
+  | { type: 'error'; message: string };

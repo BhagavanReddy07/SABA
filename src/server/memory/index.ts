@@ -7,6 +7,7 @@
 // recall() gathers context before generating; remember() persists after.
 // Every tier degrades gracefully — a missing service never breaks chat.
 
+import { after } from 'next/server';
 import type { Memory, MemoryTrace } from '@/lib/types';
 import { listMemories, saveMemory } from '../db';
 import { generateJson, hasGeminiKey } from '../gemini';
@@ -14,6 +15,13 @@ import { appendToWindow, getWindow, type WorkingMemoryEntry } from './working';
 import { searchSimilar, storeEmbedding, type SemanticHit } from './semantic';
 
 const MAX_FACTS_IN_PROMPT = 15;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
 
 export type Recall = {
   window: WorkingMemoryEntry[];
@@ -30,7 +38,10 @@ export async function recall(
   const [window, allFacts, semantic] = await Promise.all([
     getWindow(conversationId),
     listMemories(userId).catch(() => [] as Memory[]),
-    searchSimilar(userId, query),
+    // Tier 3 recall is on the critical path before the first token — cap it.
+    // Slow embed/Pinecone round-trip → skip semantic recall for this reply
+    // instead of making the user wait.
+    withTimeout(searchSimilar(userId, query), 2500, [] as SemanticHit[]),
   ]);
   const facts = allFacts.slice(0, MAX_FACTS_IN_PROMPT);
 
@@ -59,12 +70,16 @@ export async function remember(
   await appendToWindow(conversationId, { role: 'user', content: userMessage.content });
   await appendToWindow(conversationId, { role: 'assistant', content: assistantContent });
 
+  // Background work runs via after() so serverless hosts (Vercel) keep the
+  // function alive past the response instead of killing fire-and-forget promises.
   // Tier 3: embed the user's message for future cross-conversation recall.
-  void storeEmbedding(userMessage.id, userId, userMessage.content, 'message');
+  after(() => storeEmbedding(userMessage.id, userId, userMessage.content, 'message'));
 
   // Tier 2: extract durable facts from this exchange (async, best-effort).
-  void extractFacts(userId, userMessage.content, assistantContent).catch((err) =>
-    console.warn('[memory] fact extraction failed:', (err as Error).message)
+  after(() =>
+    extractFacts(userId, userMessage.content, assistantContent).catch((err) =>
+      console.warn('[memory] fact extraction failed:', (err as Error).message)
+    )
   );
 }
 
@@ -82,10 +97,11 @@ async function extractFacts(
     `You extract durable facts about a user from a chat exchange for an assistant's long-term memory.
 Return ONLY a JSON array (no prose). Each item: {"content": "...", "category": "fact"|"preference"|"goal"}.
 Rules:
-- Only stable, personal information worth remembering for months (name, location, job, preferences, goals, important dates).
-- Skip small talk, questions, and anything already known.
+- Only stable facts about the user's REAL LIFE, worth remembering for months: identity, relationships, location, job, tastes, important dates, long-term personal goals.
+- NEVER store facts about the current task or conversation topic: questions they asked, projects being discussed, this assistant/app itself, deployment/coding/testing chatter, or one-off requests. "User asked about X" and "User is interested in <current topic>" are NOT memories.
+- Skip small talk and anything already known.
 - Write each fact as a short third-person sentence, e.g. "User's name is Priya."
-- Return [] if there is nothing new.`,
+- Return [] if there is nothing new. When unsure, return [].`,
     `ALREADY KNOWN:\n${existing.slice(0, 30).join('\n') || '(nothing)'}\n\nEXCHANGE:\nuser: ${userContent}\nassistant: ${assistantContent}`
   );
 
@@ -97,6 +113,6 @@ Rules:
       : 'fact';
     const saved = await saveMemory(userId, item.content.trim(), category, 'extracted');
     // Facts are also embedded so Tier 3 can recall them semantically.
-    void storeEmbedding(`memory-${saved.id}`, userId, saved.content, 'memory');
+    await storeEmbedding(`memory-${saved.id}`, userId, saved.content, 'memory');
   }
 }
