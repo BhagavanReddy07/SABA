@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  BrainCircuit,
   Download,
   Loader2,
   Menu,
@@ -26,14 +25,15 @@ import { TasksPanel } from '@/components/chat/tasks-panel';
 import { useTheme } from '@/lib/use-theme';
 import { actionUrl } from '@/lib/actions';
 
-const STARTERS = [
-  'Hi! My name is …, and I love …',
-  'What do you remember about me?',
-  'Help me plan my week',
-  'Explain vector embeddings simply',
-];
-
 const STREAMING_ID = '__streaming__';
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Up late';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function ChatPage() {
   const router = useRouter();
@@ -401,32 +401,21 @@ export default function ChatPage() {
         {/* Messages / empty state */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 && !thinking ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <div className="animate-float-slow mb-5 rounded-2xl bg-gradient-to-br from-violet-600/20 to-cyan-500/20 p-5 shadow-lg shadow-violet-900/20">
-                <BrainCircuit className="h-10 w-10 text-violet-300" />
+            <div className="flex h-full flex-col items-center justify-center px-4 pb-16">
+              <div className="animate-fade-up mb-8 flex items-center gap-3 text-center">
+                <Sparkles className="h-7 w-7 text-violet-400" />
+                <h2 className="font-display text-3xl font-medium tracking-tight text-slate-100 md:text-4xl">
+                  {greeting()}, {user.name.split(' ')[0]}
+                </h2>
               </div>
-              <h2 className="font-display text-2xl font-bold">
-                Hey {user.name.split(' ')[0]} 👋
-              </h2>
-              <p className="mt-2 max-w-sm text-sm text-slate-500">
-                I remember what you tell me — across conversations. The more we talk, the
-                better I get.
-              </p>
-              <div className="mt-8 grid w-full max-w-md gap-2 sm:grid-cols-2">
-                {STARTERS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="glass rounded-xl px-4 py-3 text-left text-xs text-slate-400 transition hover:-translate-y-0.5 hover:bg-wash/[0.08] hover:text-slate-200 hover:shadow-lg hover:shadow-violet-900/20"
-                  >
-                    {s}
-                  </button>
-                ))}
+              <div className="animate-fade-up w-full" style={{ animationDelay: '100ms' }}>
+                <Composer onSend={send} disabled={streaming} variant="hero" />
               </div>
-              <p className="mt-8 text-[11px] text-slate-600">
-                Tip: <kbd className="rounded border border-edge px-1.5 py-0.5">Ctrl</kbd>+
-                <kbd className="rounded border border-edge px-1.5 py-0.5">K</kbd> starts a
-                fresh chat anytime
+              <p
+                className="animate-fade-up mt-6 text-xs text-slate-600"
+                style={{ animationDelay: '200ms' }}
+              >
+                I remember what you tell me — across conversations.
               </p>
             </div>
           ) : (
@@ -450,7 +439,9 @@ export default function ChatPage() {
           </div>
         )}
 
-        <Composer onSend={send} disabled={streaming} />
+        {(messages.length > 0 || thinking) && (
+          <Composer onSend={send} disabled={streaming} />
+        )}
       </main>
 
       {panelOpen && (

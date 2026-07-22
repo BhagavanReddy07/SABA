@@ -27,9 +27,12 @@ function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
 export function Composer({
   onSend,
   disabled,
+  variant = 'bottom',
 }: {
   onSend: (text: string) => void;
   disabled: boolean;
+  /** 'hero' renders the large centered box for the empty state (Claude-style). */
+  variant?: 'bottom' | 'hero';
 }) {
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
@@ -78,50 +81,65 @@ export function Composer({
     onSend(trimmed);
   };
 
+  const hero = variant === 'hero';
+
+  const box = (
+    <div
+      className={`glass-deep mx-auto flex w-full items-end gap-1.5 transition-shadow focus-within:shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_8px_40px_-12px_rgba(139,92,246,0.35)] ${
+        hero ? 'max-w-2xl rounded-3xl p-3' : 'max-w-3xl rounded-2xl p-2'
+      } ${listening ? 'shadow-[0_0_0_1px_rgba(239,68,68,0.5)]' : ''}`}
+    >
+      <textarea
+        ref={textareaRef}
+        value={text}
+        autoFocus={hero}
+        onChange={(e) => {
+          setText(e.target.value);
+          e.target.style.height = 'auto';
+          e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        rows={hero ? 2 : 1}
+        placeholder={
+          listening
+            ? 'Listening… speak now'
+            : hero
+              ? 'Ask me anything — I remember everything you tell me'
+              : 'Message SABA…'
+        }
+        className={`max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-slate-100 placeholder:text-slate-500 outline-none ${hero ? 'text-base' : 'text-sm'}`}
+      />
+      {speechSupported && (
+        <button
+          onClick={toggleMic}
+          className={`btn-icon !p-2.5 ${listening ? '!text-red-400' : ''}`}
+          aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+          title={listening ? 'Stop voice input' : 'Speak instead of typing'}
+        >
+          {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </button>
+      )}
+      <button
+        onClick={submit}
+        disabled={disabled || !text.trim()}
+        className="btn-primary !rounded-xl !p-2.5"
+        aria-label="Send message"
+      >
+        <SendHorizonal className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  if (hero) return box;
+
   return (
     <div className="border-t border-edge bg-ink/60 px-4 py-4 backdrop-blur-md">
-      <div
-        className={`glass-deep mx-auto flex w-full max-w-3xl items-end gap-1.5 rounded-2xl p-2 transition-shadow focus-within:shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_8px_40px_-12px_rgba(139,92,246,0.35)] ${
-          listening ? 'shadow-[0_0_0_1px_rgba(239,68,68,0.5)]' : ''
-        }`}
-      >
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            e.target.style.height = 'auto';
-            e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={1}
-          placeholder={listening ? 'Listening… speak now' : 'Message SABA…'}
-          className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none"
-        />
-        {speechSupported && (
-          <button
-            onClick={toggleMic}
-            className={`btn-icon !p-2.5 ${listening ? '!text-red-400' : ''}`}
-            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
-            title={listening ? 'Stop voice input' : 'Speak instead of typing'}
-          >
-            {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </button>
-        )}
-        <button
-          onClick={submit}
-          disabled={disabled || !text.trim()}
-          className="btn-primary !rounded-xl !p-2.5"
-          aria-label="Send message"
-        >
-          <SendHorizonal className="h-4 w-4" />
-        </button>
-      </div>
+      {box}
       <p className="mt-2 text-center text-[11px] text-slate-600">
         SABA remembers across conversations — try telling it about yourself.
       </p>
