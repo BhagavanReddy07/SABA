@@ -1,11 +1,18 @@
-// Minimal Gemini REST client — chat generation + embeddings.
-// No SDK: two endpoints and a fallback chain don't justify a dependency.
+// Minimal LLM REST client — chat generation (Groq first, Gemini fallback) + embeddings.
+// No SDK: a few endpoints and a fallback chain don't justify a dependency.
+//
+// Groq's free tier allows thousands of requests/day vs Gemini's ~20/model,
+// so when GROQ_API_KEY is set it handles chat; Gemini stays for embeddings
+// (Groq has none) and as the chat fallback.
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Tried in order; flash-lite first for latency, falling back to fuller models
 // if it's rate-limited or unavailable.
 const CHAT_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+// Groq: best model first, then the high-quota small one (~14k req/day free).
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
 
 // A hung request shouldn't block the whole fallback chain — fail fast and try the next model.
 const CHAT_TIMEOUT_MS = 12_000;
@@ -18,13 +25,63 @@ export function hasGeminiKey(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
+/** True when any chat-capable provider is configured. */
+export function hasChatKey(): boolean {
+  return Boolean(process.env.GROQ_API_KEY) || hasGeminiKey();
+}
+
+type GenOptions = { temperature?: number; maxOutputTokens?: number };
+
+function groqRequest(model: string, system: string, user: string, options: GenOptions, stream: boolean) {
+  return fetch(GROQ_BASE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxOutputTokens ?? 1024,
+      stream,
+    }),
+    signal: AbortSignal.timeout(stream ? 45_000 : CHAT_TIMEOUT_MS),
+  });
+}
+
 export async function generateText(
   systemInstruction: string,
   userPrompt: string,
-  options: { temperature?: number; maxOutputTokens?: number } = {}
+  options: GenOptions = {}
 ): Promise<string> {
+  if (!hasChatKey()) throw new Error('No chat API key set (GROQ_API_KEY or GEMINI_API_KEY)');
+
+  let lastError: unknown;
+
+  if (process.env.GROQ_API_KEY) {
+    for (const model of GROQ_MODELS) {
+      try {
+        const res = await groqRequest(model, systemInstruction, userPrompt, options, false);
+        if (!res.ok) {
+          lastError = new Error(`groq/${model}: HTTP ${res.status}`);
+          continue;
+        }
+        const data = await res.json();
+        const text: string = data?.choices?.[0]?.message?.content ?? '';
+        if (text.trim()) return text.trim();
+        lastError = new Error(`groq/${model}: empty response`);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  if (!apiKey) throw lastError ?? new Error('All chat models failed');
 
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: systemInstruction }] },
@@ -35,7 +92,6 @@ export async function generateText(
     },
   });
 
-  let lastError: unknown;
   for (const model of CHAT_MODELS) {
     try {
       const res = await fetch(`${BASE}/models/${model}:generateContent`, {
@@ -67,10 +123,65 @@ export async function generateText(
 export async function* generateTextStream(
   systemInstruction: string,
   userPrompt: string,
-  options: { temperature?: number; maxOutputTokens?: number } = {}
+  options: GenOptions = {}
 ): AsyncGenerator<string> {
+  if (!hasChatKey()) throw new Error('No chat API key set (GROQ_API_KEY or GEMINI_API_KEY)');
+
+  let lastError: unknown;
+
+  if (process.env.GROQ_API_KEY) {
+    for (const model of GROQ_MODELS) {
+      let res: Response;
+      try {
+        res = await groqRequest(model, systemInstruction, userPrompt, options, true);
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
+      if (!res.ok || !res.body) {
+        lastError = new Error(`groq/${model}: HTTP ${res.status}`);
+        continue;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let yielded = false;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const json = line.slice(5).trim();
+            if (!json || json === '[DONE]') continue;
+            try {
+              const text: string | undefined =
+                JSON.parse(json)?.choices?.[0]?.delta?.content;
+              if (text) {
+                yielded = true;
+                yield text;
+              }
+            } catch {
+              // ignore malformed keep-alive chunks
+            }
+          }
+        }
+      } catch (err) {
+        if (yielded) return; // partial output already sent — stop cleanly
+        lastError = err;
+        continue;
+      }
+      if (yielded) return;
+      lastError = new Error(`groq/${model}: empty stream`);
+    }
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  if (!apiKey) throw lastError ?? new Error('All chat models failed');
 
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: systemInstruction }] },
@@ -81,7 +192,6 @@ export async function* generateTextStream(
     },
   });
 
-  let lastError: unknown;
   for (const model of CHAT_MODELS) {
     let res: Response;
     try {

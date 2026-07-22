@@ -9,7 +9,7 @@ import {
   saveMessage,
   touchConversation,
 } from './db';
-import { generateText, generateTextStream, hasGeminiKey } from './gemini';
+import { generateText, generateTextStream, hasChatKey } from './gemini';
 import { recall, remember, type Recall } from './memory';
 
 /**
@@ -41,7 +41,7 @@ export async function* chatStream(
   };
 
   let reply = '';
-  if (hasGeminiKey()) {
+  if (hasChatKey()) {
     try {
       for await (const chunk of generateTextStream(
         buildSystemPrompt(userName, memory),
@@ -78,7 +78,7 @@ export async function* chatStream(
   await remember(userId, conversation.id, userMessage, reply);
 
   // First exchange of a new conversation → ask Gemini for a proper short title.
-  if (isNew && hasGeminiKey()) {
+  if (isNew && hasChatKey()) {
     const convId = conversation.id;
     after(() =>
       autoTitle(convId, userId, input, reply).catch((err) =>
@@ -208,7 +208,7 @@ Never emit an action tag for ordinary questions or conversation.`,
 /** Without an API key the app still works end-to-end for demos. */
 function demoReply(memory: Recall): string {
   const parts = [
-    "I'm running in demo mode (no GEMINI_API_KEY configured), so I can't generate a real answer — but my memory system is live:",
+    "I'm running in demo mode (no GROQ_API_KEY or GEMINI_API_KEY configured), so I can't generate a real answer — but my memory system is live:",
     `• Working memory holds ${memory.trace.workingMemory} recent message${memory.trace.workingMemory === 1 ? '' : 's'} from this conversation.`,
     `• I've stored ${memory.trace.episodic.length} long-term fact${memory.trace.episodic.length === 1 ? '' : 's'} about you.`,
   ];
@@ -217,6 +217,6 @@ function demoReply(memory: Recall): string {
       `• Semantic recall surfaced: "${memory.trace.semantic[0].content.slice(0, 120)}"`
     );
   }
-  parts.push('Add a Gemini API key to .env to unlock full responses.');
+  parts.push('Add a Groq or Gemini API key to .env to unlock full responses.');
   return parts.join('\n');
 }

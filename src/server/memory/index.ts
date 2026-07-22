@@ -10,7 +10,7 @@
 import { after } from 'next/server';
 import type { Memory, MemoryTrace } from '@/lib/types';
 import { listMemories, saveMemory } from '../db';
-import { generateJson, hasGeminiKey } from '../gemini';
+import { generateJson, hasChatKey } from '../gemini';
 import { appendToWindow, getWindow, type WorkingMemoryEntry } from './working';
 import { searchSimilar, storeEmbedding, type SemanticHit } from './semantic';
 
@@ -89,7 +89,7 @@ async function extractFacts(
   userContent: string,
   assistantContent: string
 ): Promise<void> {
-  if (!hasGeminiKey()) return;
+  if (!hasChatKey()) return;
 
   const existing = (await listMemories(userId)).map((m) => m.content);
 
