@@ -1,5 +1,7 @@
 # SABA — a personal AI assistant that actually remembers you
 
+**🚀 Try it live: [saba-assistant.vercel.app](https://saba-assistant.vercel.app)**
+
 Most chatbots forget everything when the tab closes. SABA layers **three tiers of
 memory** — each in the storage engine built for the job — so every conversation
 builds on the last.
