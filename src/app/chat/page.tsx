@@ -148,7 +148,13 @@ export default function ChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversationId: activeId ?? undefined }),
+        body: JSON.stringify({
+          message: text,
+          conversationId: activeId ?? undefined,
+          // Local time + zone so "remind me at 6pm" resolves to the right moment.
+          clientTime: new Date().toString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
@@ -212,6 +218,11 @@ export default function ChatPage() {
             // so the message also renders a clickable action card.
             if (event.message.action) {
               window.open(actionUrl(event.message.action), '_blank', 'noopener');
+            }
+            // The assistant created a reminder task — show it in the panel right away.
+            if (event.message.task) {
+              const task = event.message.task;
+              setTasks((prev) => [task, ...prev]);
             }
             break;
           }
@@ -286,11 +297,11 @@ export default function ChatPage() {
     await fetch(`/api/memories/${id}`, { method: 'DELETE' });
   };
 
-  const addTask = async (content: string) => {
+  const addTask = async (content: string, dueAt?: string) => {
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, dueAt, kind: dueAt ? 'reminder' : 'task' }),
     });
     if (res.ok) {
       const { task } = await res.json();

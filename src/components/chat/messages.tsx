@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -22,7 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import type { Components } from 'react-markdown';
-import type { ChatAction, Message, MemoryTrace } from '@/lib/types';
+import type { DeepLinkAction, Message, MemoryTrace } from '@/lib/types';
 import { actionLabel, actionUrl } from '@/lib/actions';
 
 export function Messages({
@@ -124,7 +124,7 @@ function MessageBubble({
   );
 }
 
-const ACTION_ICON: Record<ChatAction['type'], typeof Music> = {
+const ACTION_ICON: Record<DeepLinkAction['type'], typeof Music> = {
   spotify: Music,
   youtube: Youtube,
   maps: MapPin,
@@ -132,8 +132,8 @@ const ACTION_ICON: Record<ChatAction['type'], typeof Music> = {
   mail: Mail,
 };
 
-/** Clickable deep-link card — the reliable path when the popup blocker eats the auto-open. */
-function ActionCard({ action }: { action: ChatAction }) {
+/** Clickable deep-link card â€” the reliable path when the popup blocker eats the auto-open. */
+function ActionCard({ action }: { action: DeepLinkAction }) {
   const Icon = ACTION_ICON[action.type];
   const detail =
     action.type === 'mail'
@@ -178,7 +178,7 @@ function CopyButton({ text }: { text: string }) {
 
 function SpeakButton({ text }: { text: string }) {
   const [speaking, setSpeaking] = useState(false);
-  // ponytail: browser speechSynthesis — free, no API. Hidden if unsupported.
+  // ponytail: browser speechSynthesis â€” free, no API. Hidden if unsupported.
   if (typeof window !== 'undefined' && !('speechSynthesis' in window)) return null;
   return (
     <button
@@ -217,7 +217,7 @@ function TraceToggle({ trace }: { trace: MemoryTrace }) {
       <button
         onClick={() => setOpen(!open)}
         className={`btn-icon !p-1 ${open ? '!text-violet-300' : ''}`}
-        title="Memory trace — what SABA recalled for this reply"
+        title="Memory trace â€” what SABA recalled for this reply"
         aria-label="Toggle memory trace"
       >
         <BrainCircuit className="h-3.5 w-3.5" />
@@ -228,7 +228,7 @@ function TraceToggle({ trace }: { trace: MemoryTrace }) {
           <TraceRow
             icon={Zap}
             color="text-cyan-300"
-            label={`Working memory — ${trace.workingMemory} recent message${trace.workingMemory === 1 ? '' : 's'} in context`}
+            label={`Working memory â€” ${trace.workingMemory} recent message${trace.workingMemory === 1 ? '' : 's'} in context`}
           />
           <TraceRow
             icon={Database}
@@ -248,7 +248,7 @@ function TraceToggle({ trace }: { trace: MemoryTrace }) {
                 ? `Similar past moments (${trace.semantic.length}):`
                 : 'Similar past moments: none found'
             }
-            items={trace.semantic.map((s) => `${s.content} · ${Math.round(s.score * 100)}%`)}
+            items={trace.semantic.map((s) => `${s.content} Â· ${Math.round(s.score * 100)}%`)}
           />
         </div>
       )}
@@ -293,7 +293,7 @@ function TypingIndicator() {
         <Sparkles className="h-4 w-4 text-white" />
       </div>
       <div className="glass flex items-center gap-2 rounded-2xl rounded-bl-md px-4 py-3">
-        <span className="text-shimmer text-xs font-medium">Recalling memories…</span>
+        <span className="text-shimmer text-xs font-medium">Recalling memoriesâ€¦</span>
       </div>
     </div>
   );

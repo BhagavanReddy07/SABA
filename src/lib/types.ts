@@ -5,6 +5,8 @@ export type User = {
   email: string;
   name: string;
   createdAt: string;
+  /** IANA timezone captured from the browser; used to format reminder emails. */
+  timezone?: string | null;
 };
 
 export type Conversation = {
@@ -23,14 +25,21 @@ export type Message = {
   /** What the assistant recalled to produce this reply (assistant messages only). */
   memoryTrace?: MemoryTrace;
   /** External action the reply wants to open (Spotify, YouTube, mail, …) — transient, not persisted. */
-  action?: ChatAction;
+  action?: DeepLinkAction;
+  /** Task the assistant just created from this reply (reminder action) — transient. */
+  task?: Task;
 };
 
 /** A deep link into an external app, produced by the assistant when asked to play/open/compose something. */
-export type ChatAction =
+export type DeepLinkAction =
   | { type: 'youtube'; query: string; videoId?: string }
   | { type: 'spotify' | 'maps' | 'search'; query: string }
   | { type: 'mail'; to?: string; subject?: string; body?: string };
+
+export type ChatAction =
+  | DeepLinkAction
+  /** Handled server-side (creates a task) — never sent to the client as a deep link. */
+  | { type: 'reminder'; content: string; dueAt?: string; priority?: Task['priority'] };
 
 export type MemoryCategory = 'fact' | 'preference' | 'goal' | 'summary';
 

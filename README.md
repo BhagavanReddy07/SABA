@@ -33,6 +33,9 @@ builds on the last.
 - **Smart actions** — say *“play Take Five on Spotify”*, *“open the Dune trailer”,*
   or *“write a mail to…”* and SABA opens the right app in a new tab (deep links —
   no extra APIs, no cost).
+- **Email reminders** — say *"remind me to call mom at 6pm"* (or set a due time in
+  the Tasks panel) and SABA emails you when it's due, with **Mark as done** and
+  **Snooze 15 min** buttons right in the email that update the task in the app.
 - **AI conversation titles** — chats name themselves after the first exchange.
 - **Voice input & read-aloud** — Web Speech API, right in the browser.
 - **Memory trace** — a brain chip under each reply shows exactly what was recalled
@@ -156,6 +159,22 @@ Everything SABA needs has a free tier. Recommended stack: **Vercel + Neon**.
      (Want it anyway? [Upstash](https://upstash.com) has a free Redis and its
      `redis://` URL drops straight in.)
 4. Deploy. Done — no Docker in production.
+
+### Email reminders (optional, also free)
+
+Tasks and reminders with a due time get a friendly email with **✅ Mark as done**
+and **💤 Snooze 15 min** buttons — the buttons update the task in SABA itself
+(snooze re-sends the email 15 minutes later). Say *"remind me to call mom at 6pm"*
+in chat, or set a time in the Tasks panel.
+
+1. **[Brevo](https://app.brevo.com)** (free, 300 emails/day, no card): sign up,
+   verify a sender address under *Settings → Senders*, create an API key under
+   *Settings → SMTP & API*. Add to Vercel: `BREVO_API_KEY` and `BREVO_FROM`
+   (the verified sender address).
+2. Add `CRON_SECRET` (any long random string) to Vercel too.
+3. **[cron-job.org](https://cron-job.org)** (free): create a job that calls
+   `https://<your-app>/api/cron/reminders?key=<CRON_SECRET>` every 5 minutes.
+   That's the scheduler — it emails whatever became due since the last run.
 
 Also works on **Render** (free web service): build `npm install && npm run build`,
 start `npm start`, same env vars. Render's free Postgres works too (expires after
