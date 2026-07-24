@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getSessionUser } from '@/server/auth';
 import { chatStream } from '@/server/assistant';
+import { setUserTimezone } from '@/server/db';
 import type { ChatStreamEvent } from '@/lib/types';
 
 export const maxDuration = 60; // free-tier function ceiling on Vercel
@@ -12,12 +13,17 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { message, conversationId } = await request.json();
+  const { message, conversationId, clientTime, timezone } = await request.json();
   if (typeof message !== 'string' || !message.trim()) {
     return Response.json({ error: 'Message is required' }, { status: 400 });
   }
   if (conversationId !== undefined && typeof conversationId !== 'string') {
     return Response.json({ error: 'conversationId must be a string' }, { status: 400 });
+  }
+
+  // Remember the browser's timezone so reminder emails show times the user recognizes.
+  if (typeof timezone === 'string' && timezone.length <= 64) {
+    setUserTimezone(user.id, timezone).catch(() => {});
   }
 
   const encoder = new TextEncoder();
@@ -30,7 +36,8 @@ export async function POST(request: NextRequest): Promise<Response> {
           user.id,
           user.name,
           message.trim(),
-          conversationId
+          conversationId,
+          typeof clientTime === 'string' ? clientTime.slice(0, 80) : undefined
         )) {
           send(event);
         }

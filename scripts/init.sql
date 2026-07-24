@@ -74,3 +74,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_user
   ON tasks (user_id, created_at DESC);
+
+-- Email reminders: when the reminder email was last sent (NULL = not yet / re-send after snooze).
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
+-- IANA timezone captured from the browser, used to format times in reminder emails.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;

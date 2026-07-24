@@ -1,8 +1,8 @@
-// Deep links into external apps — all free, no API keys.
+﻿// Deep links into external apps â€” all free, no API keys.
 
-import type { ChatAction } from './types';
+import type { DeepLinkAction } from './types';
 
-export function actionUrl(action: ChatAction): string {
+export function actionUrl(action: DeepLinkAction): string {
   switch (action.type) {
     case 'youtube':
       // With a resolved video ID the watch page starts playing immediately;
@@ -26,7 +26,7 @@ export function actionUrl(action: ChatAction): string {
   }
 }
 
-export function actionLabel(action: ChatAction): string {
+export function actionLabel(action: DeepLinkAction): string {
   switch (action.type) {
     case 'youtube':
       return `Play on YouTube`;

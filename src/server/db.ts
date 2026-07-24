@@ -20,6 +20,7 @@ function toUser(row: any): DbUser {
     email: row.email,
     name: row.name,
     createdAt: row.created_at.toISOString(),
+    timezone: row.timezone ?? null,
     passwordHash: row.password_hash,
   };
 }
@@ -46,6 +47,13 @@ export async function getUserByEmail(email: string): Promise<DbUser | null> {
 export async function getUserById(id: string): Promise<DbUser | null> {
   const { rows } = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
   return rows[0] ? toUser(rows[0]) : null;
+}
+
+export async function setUserTimezone(id: string, timezone: string): Promise<void> {
+  await pool.query(
+    `UPDATE users SET timezone = $2 WHERE id = $1 AND timezone IS DISTINCT FROM $2`,
+    [id, timezone]
+  );
 }
 
 export async function updateUserName(id: string, name: string): Promise<DbUser> {
@@ -268,4 +276,48 @@ export async function setTaskCompleted(
 
 export async function deleteTask(id: string, userId: string): Promise<void> {
   await pool.query(`DELETE FROM tasks WHERE id = $1 AND user_id = $2`, [id, userId]);
+}
+
+// --- Email reminders ---
+
+export type DueTask = Task & { userEmail: string; userName: string; userTimezone: string | null };
+
+/** Uncompleted tasks whose due time has passed and no reminder email sent yet. */
+export async function listDueTasks(): Promise<DueTask[]> {
+  const { rows } = await pool.query(
+    `SELECT t.*, u.email AS user_email, u.name AS user_name, u.timezone AS user_timezone
+     FROM tasks t JOIN users u ON u.id = t.user_id
+     WHERE t.due_at <= now() AND t.completed_at IS NULL AND t.reminded_at IS NULL
+     ORDER BY t.due_at ASC LIMIT 50`
+  );
+  return rows.map((row) => ({
+    ...toTask(row),
+    userEmail: row.user_email,
+    userName: row.user_name,
+    userTimezone: row.user_timezone ?? null,
+  }));
+}
+
+export async function markTaskReminded(id: string): Promise<void> {
+  await pool.query(`UPDATE tasks SET reminded_at = now() WHERE id = $1`, [id]);
+}
+
+/** Email-button action: mark done without knowing the user id (task id comes from a signed token). */
+export async function completeTaskById(id: string): Promise<Task | null> {
+  const { rows } = await pool.query(
+    `UPDATE tasks SET completed_at = now() WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return rows[0] ? toTask(rows[0]) : null;
+}
+
+/** Email-button action: push the task 15 minutes out and re-arm the reminder email. */
+export async function snoozeTaskById(id: string, minutes: number): Promise<Task | null> {
+  const { rows } = await pool.query(
+    `UPDATE tasks
+     SET due_at = now() + make_interval(mins => $2), reminded_at = NULL
+     WHERE id = $1 AND completed_at IS NULL RETURNING *`,
+    [id, minutes]
+  );
+  return rows[0] ? toTask(rows[0]) : null;
 }

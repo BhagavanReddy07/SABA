@@ -4,6 +4,7 @@ import { after } from 'next/server';
 import type { ChatAction, ChatStreamEvent } from '@/lib/types';
 import {
   createConversation,
+  createTask,
   getConversation,
   renameConversation,
   saveMessage,
@@ -20,7 +21,8 @@ export async function* chatStream(
   userId: string,
   userName: string,
   input: string,
-  conversationId?: string
+  conversationId?: string,
+  clientTime?: string
 ): AsyncGenerator<ChatStreamEvent> {
   // Resolve or create the conversation (title = first message until AI titles it).
   let conversation = conversationId
@@ -44,7 +46,7 @@ export async function* chatStream(
   if (hasChatKey()) {
     try {
       for await (const chunk of generateTextStream(
-        buildSystemPrompt(userName, memory),
+        buildSystemPrompt(userName, memory, clientTime),
         input
       )) {
         reply += chunk;
@@ -71,6 +73,23 @@ export async function* chatStream(
     action.videoId = await resolveYouTubeVideo(action.query);
   }
 
+  // Reminders are handled here, not in the browser: create the task now so the
+  // cron emailer picks it up when it's due. The created task rides on the done
+  // event so the tasks panel updates instantly.
+  let createdTask;
+  if (action?.type === 'reminder') {
+    try {
+      createdTask = await createTask(userId, {
+        content: action.content,
+        kind: 'reminder',
+        priority: action.priority,
+        dueAt: action.dueAt ?? null,
+      });
+    } catch (err) {
+      console.error('[assistant] reminder creation failed:', err);
+    }
+  }
+
   // Tier 2: persist both turns, then update the other tiers.
   const userMessage = await saveMessage(conversation.id, 'user', input);
   const assistantMessage = await saveMessage(conversation.id, 'assistant', reply);
@@ -89,11 +108,17 @@ export async function* chatStream(
 
   yield {
     type: 'done',
-    message: { ...assistantMessage, memoryTrace: memory.trace, action },
+    message: {
+      ...assistantMessage,
+      memoryTrace: memory.trace,
+      // Reminder actions never reach the client as deep links — they became a task.
+      action: action?.type === 'reminder' ? undefined : action,
+      task: createdTask,
+    },
   };
 }
 
-const ACTION_TYPES = ['youtube', 'spotify', 'maps', 'search', 'mail'] as const;
+const ACTION_TYPES = ['youtube', 'spotify', 'maps', 'search', 'mail', 'reminder'] as const;
 
 /**
  * First matching video ID from YouTube's public search page — no API key.
@@ -124,6 +149,24 @@ function extractAction(reply: string): { cleaned: string; action?: ChatAction } 
   try {
     const parsed = JSON.parse(match[1]);
     if (!ACTION_TYPES.includes(parsed?.type)) return { cleaned };
+    if (parsed.type === 'reminder') {
+      if (typeof parsed.content !== 'string' || !parsed.content.trim()) return { cleaned };
+      const dueAt =
+        typeof parsed.dueAt === 'string' && !Number.isNaN(Date.parse(parsed.dueAt))
+          ? new Date(parsed.dueAt).toISOString()
+          : undefined;
+      return {
+        cleaned,
+        action: {
+          type: 'reminder',
+          content: parsed.content.trim(),
+          dueAt,
+          priority: ['low', 'medium', 'high'].includes(parsed.priority)
+            ? parsed.priority
+            : undefined,
+        },
+      };
+    }
     if (parsed.type === 'mail') {
       return {
         cleaned,
@@ -157,10 +200,11 @@ async function autoTitle(
   if (cleaned) await renameConversation(conversationId, userId, cleaned);
 }
 
-function buildSystemPrompt(userName: string, memory: Recall): string {
+function buildSystemPrompt(userName: string, memory: Recall, clientTime?: string): string {
   const sections: string[] = [
     `You are SABA, a personal AI assistant with a layered long-term memory.
 You are talking to ${userName}. Be warm, concise, and concrete.
+${clientTime ? `The user's current local date & time is: ${clientTime}` : ''}
 Use the memory sections below naturally — reference past context when relevant,
 but never recite memory verbatim or mention "tiers" or "databases".
 
@@ -171,12 +215,20 @@ or a web search — reply briefly, then end with EXACTLY ONE action tag as the v
 line, in this exact format (raw JSON, no markdown fences):
 [[action:{"type":"youtube","query":"Blinding Lights The Weeknd official audio"}]]
 Valid types: "youtube" | "spotify" | "maps" | "search" (all take "query"),
-and "mail" (takes "to", "subject", "body" — write the complete email in "body").
+"mail" (takes "to", "subject", "body" — write the complete email in "body"),
+and "reminder" (takes "content", "dueAt", optional "priority": low|medium|high).
 Routing rules:
 - Any "play ..." request — songs, music, videos, trailers — use "youtube" (it starts
   playing instantly). Use "spotify" ONLY when the user explicitly says Spotify.
 - Make the query specific: include artist/movie names, add "official audio" for songs
   and "official trailer" for trailers.
+- When the user asks to be reminded of something, or to add a task/todo ("remind me
+  to call mom at 6pm", "add a task to submit the report tomorrow morning"), use
+  "reminder". "content" is a short imperative phrase ("Call mom"). "dueAt" is the
+  due time as full ISO 8601 WITH the user's UTC offset, computed from their current
+  local time above (e.g. "remind me in 20 minutes" → now + 20 min). If no time was
+  given, omit "dueAt". Confirm briefly in your reply, e.g. "Done — I'll email you
+  at 6 PM." Reminders are emailed to the user when due.
 Never emit an action tag for ordinary questions or conversation.`,
   ];
 

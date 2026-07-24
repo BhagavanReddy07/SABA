@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckSquare, Plus, Square, Trash2, X } from 'lucide-react';
+import { Bell, CheckSquare, Plus, Square, Trash2, X } from 'lucide-react';
 import type { Task } from '@/lib/types';
 
 const PRIORITY_DOT: Record<Task['priority'], string> = {
@@ -12,21 +12,32 @@ const PRIORITY_DOT: Record<Task['priority'], string> = {
 
 type Props = {
   tasks: Task[];
-  onAddTask: (content: string) => void;
+  onAddTask: (content: string, dueAt?: string) => void;
   onToggleTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
   onClose: () => void;
 };
 
+function formatDue(dueAt: string): string {
+  return new Date(dueAt).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function TasksPanel({ tasks, onAddTask, onToggleTask, onDeleteTask, onClose }: Props) {
   const [draft, setDraft] = useState('');
+  const [dueDraft, setDueDraft] = useState('');
   const openCount = tasks.filter((t) => !t.completedAt).length;
 
   const add = () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
     setDraft('');
-    onAddTask(trimmed);
+    setDueDraft('');
+    onAddTask(trimmed, dueDraft ? new Date(dueDraft).toISOString() : undefined);
   };
 
   return (
@@ -49,17 +60,27 @@ export function TasksPanel({ tasks, onAddTask, onToggleTask, onDeleteTask, onClo
         </button>
       </div>
 
-      <div className="flex gap-2 px-4 pb-3">
+      <div className="space-y-2 px-4 pb-3">
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+            placeholder="Add a task…"
+            className="input-dark !py-2 text-xs"
+          />
+          <button onClick={add} className="btn-ghost !p-2" aria-label="Add task">
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
         <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-          placeholder="Add a task…"
-          className="input-dark !py-2 text-xs"
+          type="datetime-local"
+          value={dueDraft}
+          onChange={(e) => setDueDraft(e.target.value)}
+          className="input-dark !py-1.5 text-xs text-slate-400 [color-scheme:dark]"
+          aria-label="Remind me at (optional)"
+          title="Optional: get an email reminder at this time"
         />
-        <button onClick={add} className="btn-ghost !p-2" aria-label="Add task">
-          <Plus className="h-4 w-4" />
-        </button>
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-6">
@@ -89,6 +110,11 @@ export function TasksPanel({ tasks, onAddTask, onToggleTask, onDeleteTask, onClo
                 >
                   {t.content}
                 </p>
+                {t.dueAt && !t.completedAt && (
+                  <p className="mt-1 flex items-center gap-1 text-[10px] text-violet-300/80">
+                    <Bell className="h-3 w-3" /> {formatDue(t.dueAt)}
+                  </p>
+                )}
               </div>
               <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`} />
               <button
