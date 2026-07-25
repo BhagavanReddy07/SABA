@@ -77,10 +77,9 @@ function formatDue(dueAt: string, timezone: string | null): string {
   }
 }
 
-const PRIORITY_COLOR = { low: '#64748b', medium: '#f59e0b', high: '#ef4444' } as const;
-
-function button(href: string, label: string, bg: string): string {
-  return `<a href="${href}" style="display:inline-block;padding:12px 22px;margin:0 6px;border-radius:10px;background:${bg};color:#ffffff;font-weight:600;font-size:14px;text-decoration:none;">${label}</a>`;
+/** Frosted-glass button: translucent tinted face, light border, soft glow. */
+function button(href: string, label: string, tint: string, border: string, text: string): string {
+  return `<a href="${href}" style="display:inline-block;padding:14px 22px;margin:5px;border-radius:16px;background:${tint};border:1px solid ${border};border-top:1px solid rgba(255,255,255,0.35);box-shadow:0 8px 24px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.12);color:${text};font-weight:700;font-size:14px;letter-spacing:0.2px;text-decoration:none;text-align:center;white-space:nowrap;">${label}</a>`;
 }
 
 function reminderHtml(task: DueTask, baseUrl: string): string {
@@ -90,29 +89,28 @@ function reminderHtml(task: DueTask, baseUrl: string): string {
   const firstName = escapeHtml(task.userName.split(' ')[0]);
 
   return `
-<div style="margin:0;padding:24px;background:#0f172a;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:520px;margin:0 auto;background:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
-    <div style="padding:20px 28px;background:linear-gradient(135deg,#7c3aed,#a855f7);">
-      <p style="margin:0;color:#ffffff;font-size:18px;font-weight:700;">⏰ SABA Reminder</p>
-    </div>
-    <div style="padding:28px;">
-      <p style="margin:0 0 6px;color:#cbd5e1;font-size:15px;">Hey ${firstName} 👋</p>
-      <p style="margin:0 0 20px;color:#94a3b8;font-size:14px;">You asked me to remind you about this — it's time!</p>
-      <div style="background:#0f172a;border:1px solid #334155;border-left:4px solid ${PRIORITY_COLOR[task.priority]};border-radius:10px;padding:16px 18px;">
-        <p style="margin:0;color:#f1f5f9;font-size:16px;font-weight:600;line-height:1.5;">${escapeHtml(task.content)}</p>
-        ${due ? `<p style="margin:8px 0 0;color:#94a3b8;font-size:13px;">🗓️ Due: ${due} &nbsp;·&nbsp; ${task.priority} priority</p>` : ''}
+<div style="margin:0;padding:36px 16px;background:#090914;background-image:radial-gradient(ellipse at top,#1e1b4b 0%,#090914 60%);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:460px;margin:0 auto;">
+
+    <p style="margin:0 0 18px;text-align:center;font-size:15px;font-weight:800;letter-spacing:3px;color:#a78bfa;">✦ &nbsp;S A B A&nbsp; ✦</p>
+
+    <!-- floating card -->
+    <div style="background:linear-gradient(160deg,#1e1b3a 0%,#12122b 100%);border:1px solid rgba(167,139,250,0.35);border-top:1px solid rgba(255,255,255,0.18);border-radius:24px;box-shadow:0 24px 60px rgba(124,58,237,0.35),0 4px 12px rgba(0,0,0,0.6);overflow:hidden;">
+
+      <div style="padding:30px 30px 6px;text-align:center;">
+        <div style="display:inline-block;font-size:44px;line-height:1;">⏰</div>
+        <p style="margin:12px 0 2px;color:#c4b5fd;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">It's time, ${firstName}</p>
+        <p style="margin:10px 0 0;color:#ffffff;font-size:22px;font-weight:800;line-height:1.35;text-shadow:0 2px 12px rgba(168,85,247,0.55);">${escapeHtml(task.content)}</p>
+        ${due ? `<p style="margin:14px 0 0;"><span style="display:inline-block;padding:6px 14px;border-radius:999px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);color:#c4b5fd;font-size:12px;font-weight:600;">🗓 ${due}</span></p>` : ''}
       </div>
-      <div style="text-align:center;margin:26px 0 8px;">
-        ${button(completeUrl, '✅ Mark as done', '#10b981')}
-        ${button(snoozeUrl, '💤 Snooze 15 min', '#f59e0b')}
+
+      <div style="text-align:center;padding:22px 24px 26px;">
+        ${button(completeUrl, '✓ &nbsp;Done', 'rgba(52,211,153,0.16)', 'rgba(110,231,183,0.45)', '#6ee7b7')}
+        ${button(snoozeUrl, '💤 &nbsp;Snooze 15 min', 'rgba(167,139,250,0.14)', 'rgba(196,181,253,0.4)', '#c4b5fd')}
       </div>
-      <p style="margin:18px 0 0;text-align:center;color:#64748b;font-size:12px;">
-        Snoozing sends this again in 15 minutes. Buttons also update your task list in SABA.
-      </p>
     </div>
-    <div style="padding:14px 28px;border-top:1px solid #334155;">
-      <p style="margin:0;color:#64748b;font-size:12px;">Sent with ❤️ by <a href="${baseUrl}" style="color:#a855f7;text-decoration:none;">SABA</a>, your personal assistant.</p>
-    </div>
+
+    <p style="margin:20px 0 0;text-align:center;color:#4c4a6e;font-size:11px;">One tap updates your list in <a href="${baseUrl}" style="color:#a78bfa;text-decoration:none;font-weight:600;">SABA</a> too ✨</p>
   </div>
 </div>`;
 }
