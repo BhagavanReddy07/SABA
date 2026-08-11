@@ -35,13 +35,19 @@ export async function recall(
   conversationId: string,
   query: string
 ): Promise<Recall> {
+  // Greetings and one-word acks ("hey", "ok", "thanks") carry nothing worth a
+  // cross-conversation lookup — skip the embed + Pinecone round-trip entirely.
+  const worthSemanticRecall = query.trim().length >= 12;
+
   const [window, allFacts, semantic] = await Promise.all([
     getWindow(conversationId),
     listMemories(userId).catch(() => [] as Memory[]),
     // Tier 3 recall is on the critical path before the first token — cap it.
     // Slow embed/Pinecone round-trip → skip semantic recall for this reply
     // instead of making the user wait.
-    withTimeout(searchSimilar(userId, query), 2500, [] as SemanticHit[]),
+    worthSemanticRecall
+      ? withTimeout(searchSimilar(userId, query), 1200, [] as SemanticHit[])
+      : Promise.resolve([] as SemanticHit[]),
   ]);
   const facts = allFacts.slice(0, MAX_FACTS_IN_PROMPT);
 

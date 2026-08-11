@@ -97,6 +97,37 @@ export default function ChatPage() {
     if (res.ok) setConversations((await res.json()).conversations);
   }, []);
 
+  // Flipped on logout / session expiry so the poll loop stops firing 401s.
+  const sessionLost = useRef(false);
+
+  const refreshTasks = useCallback(async () => {
+    if (sessionLost.current) return;
+    const res = await fetch('/api/tasks');
+    if (res.status === 401) {
+      sessionLost.current = true;
+      return;
+    }
+    if (res.ok) setTasks((await res.json()).tasks);
+  }, []);
+
+  // Keep the tasks panel live: Done/Snooze buttons in reminder emails change
+  // tasks from outside this tab, so refetch on focus and poll while visible.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshTasks();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', refreshTasks);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshTasks();
+    }, 5000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', refreshTasks);
+      clearInterval(interval);
+    };
+  }, [refreshTasks]);
+
   // --- Conversations ---
   const selectConversation = async (id: string) => {
     setActiveId(id);
@@ -331,7 +362,10 @@ export default function ChatPage() {
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    if (sessionLost.current) return; // ignore repeat clicks
+    sessionLost.current = true;
+    // Navigate immediately — the cookie-clearing request finishes in the background.
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     router.replace('/');
   };
 

@@ -79,3 +79,6 @@ CREATE INDEX IF NOT EXISTS idx_tasks_user
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
 -- IANA timezone captured from the browser, used to format times in reminder emails.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT;
+-- Google sign-in: such accounts have no password; google_id is Google's stable "sub" claim.
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE;

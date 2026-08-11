@@ -12,7 +12,14 @@ export const POST = handle(async (request: NextRequest) => {
   }
 
   const user = await getUserByEmail(email);
-  const valid = user && (await bcrypt.compare(password, user.passwordHash));
+  if (user && !user.passwordHash) {
+    return NextResponse.json(
+      { error: 'This account uses Google sign-in — use the Google button below' },
+      { status: 401 }
+    );
+  }
+  const valid =
+    user?.passwordHash && (await bcrypt.compare(password, user.passwordHash));
   if (!valid) {
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
   }
