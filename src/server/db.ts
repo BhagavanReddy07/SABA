@@ -12,7 +12,8 @@ if (process.env.NODE_ENV !== 'production') globalForDb.pgPool = pool;
 
 // --- Users ---
 
-export type DbUser = User & { passwordHash: string };
+// passwordHash is null for accounts created via Google sign-in.
+export type DbUser = User & { passwordHash: string | null };
 
 function toUser(row: any): DbUser {
   return {
@@ -21,7 +22,7 @@ function toUser(row: any): DbUser {
     name: row.name,
     createdAt: row.created_at.toISOString(),
     timezone: row.timezone ?? null,
-    passwordHash: row.password_hash,
+    passwordHash: row.password_hash ?? null,
   };
 }
 
@@ -47,6 +48,30 @@ export async function getUserByEmail(email: string): Promise<DbUser | null> {
 export async function getUserById(id: string): Promise<DbUser | null> {
   const { rows } = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
   return rows[0] ? toUser(rows[0]) : null;
+}
+
+export async function getUserByGoogleId(googleId: string): Promise<DbUser | null> {
+  const { rows } = await pool.query(`SELECT * FROM users WHERE google_id = $1`, [
+    googleId,
+  ]);
+  return rows[0] ? toUser(rows[0]) : null;
+}
+
+export async function createGoogleUser(
+  email: string,
+  name: string,
+  googleId: string
+): Promise<DbUser> {
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, name, google_id) VALUES ($1, $2, $3) RETURNING *`,
+    [email.toLowerCase(), name, googleId]
+  );
+  return toUser(rows[0]);
+}
+
+/** Attach a Google ID to an existing email/password account (first Google sign-in). */
+export async function linkGoogleId(userId: string, googleId: string): Promise<void> {
+  await pool.query(`UPDATE users SET google_id = $2 WHERE id = $1`, [userId, googleId]);
 }
 
 export async function setUserTimezone(id: string, timezone: string): Promise<void> {
@@ -238,6 +263,28 @@ function toTask(row: any): Task {
     completedAt: row.completed_at ? row.completed_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
   };
+}
+
+/**
+ * Backstop against the model re-emitting a reminder action on follow-up turns:
+ * an uncompleted reminder with the same content (or one due within a minute of
+ * the same time) counts as a duplicate.
+ */
+export async function findPendingReminder(
+  userId: string,
+  content: string,
+  dueAt?: string | null
+): Promise<Task | null> {
+  const { rows } = await pool.query(
+    `SELECT * FROM tasks
+     WHERE user_id = $1 AND kind = 'reminder' AND completed_at IS NULL
+       AND (lower(content) = lower($2)
+            OR ($3::timestamptz IS NOT NULL AND due_at IS NOT NULL
+                AND abs(extract(epoch FROM (due_at - $3::timestamptz))) < 60))
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, content, dueAt ?? null]
+  );
+  return rows[0] ? toTask(rows[0]) : null;
 }
 
 export async function createTask(

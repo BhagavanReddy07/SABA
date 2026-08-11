@@ -5,6 +5,7 @@ import type { ChatAction, ChatStreamEvent } from '@/lib/types';
 import {
   createConversation,
   createTask,
+  findPendingReminder,
   getConversation,
   renameConversation,
   saveMessage,
@@ -79,12 +80,15 @@ export async function* chatStream(
   let createdTask;
   if (action?.type === 'reminder') {
     try {
-      createdTask = await createTask(userId, {
-        content: action.content,
-        kind: 'reminder',
-        priority: action.priority,
-        dueAt: action.dueAt ?? null,
-      });
+      const duplicate = await findPendingReminder(userId, action.content, action.dueAt);
+      if (!duplicate) {
+        createdTask = await createTask(userId, {
+          content: action.content,
+          kind: 'reminder',
+          priority: action.priority,
+          dueAt: action.dueAt ?? null,
+        });
+      }
     } catch (err) {
       console.error('[assistant] reminder creation failed:', err);
     }
@@ -229,6 +233,10 @@ Routing rules:
   local time above (e.g. "remind me in 20 minutes" → now + 20 min). If no time was
   given, omit "dueAt". Confirm briefly in your reply, e.g. "Done — I'll email you
   at 6 PM." Reminders are emailed to the user when due.
+- Emit a reminder action ONLY when the user's LATEST message makes a NEW reminder or
+  task request. If they ask about, confirm, or acknowledge one you already set
+  ("did you set it?", "ok", "thanks"), just answer in plain text — emitting another
+  action tag would create a duplicate reminder.
 Never emit an action tag for ordinary questions or conversation.`,
   ];
 
