@@ -19,7 +19,8 @@ test('a new user can sign up, chat, add tasks and memories, search, and delete t
   await expect(page.getByRole('heading', { name: /Robin/ })).toBeVisible();
 
   // Chat: the reply finishes (memory-trace chip appears) and the conversation lands in the sidebar.
-  await page.getByLabel('Message SABA').fill('My favourite place is Hampi and I drink filter coffee every morning.');
+  const note = 'My favourite place is Hampi and I drink filter coffee every morning.';
+  await page.getByLabel('Message SABA').fill(note);
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect(page.getByRole('button', { name: 'Toggle memory trace' })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('navigation', { name: 'Conversations' }).getByRole('button').first()).toBeVisible();
@@ -35,7 +36,9 @@ test('a new user can sign up, chat, add tasks and memories, search, and delete t
   const hit = page.getByRole('button', { name: /filter coffee/i }).first();
   await expect(hit).toBeVisible();
   await hit.click();
-  await expect(page.getByText('My favourite place is Hampi', { exact: false })).toBeVisible();
+  // The whole sentence, exactly: in demo mode the chat title is this text truncated ("…filter c…"),
+  // shown in the sidebar and header, so a partial match would hit those too.
+  await expect(page.getByText(note, { exact: true })).toBeVisible();
 
   // Memory dialog via Settings: teach SABA a fact by hand.
   await page.getByRole('button', { name: 'Open settings' }).click();
