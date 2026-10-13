@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Sparkles } from 'lucide-react';
+import type { PublicConfig } from '@/lib/types';
 
 function GoogleLogo() {
   return (
@@ -16,36 +17,56 @@ function GoogleLogo() {
   );
 }
 
+type Mode = 'login' | 'signup' | 'forgot';
+
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
 
-  // The Google callback lands back here with ?error=google when sign-in fails.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('error') === 'google') {
-      setError('Google sign-in failed. Please try again.');
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setConfig)
+      .catch(() => {});
+    // The Google callback lands back here with ?error=… when sign-in fails.
+    const err = new URLSearchParams(window.location.search).get('error');
+    if (err) {
+      setError(err === 'google-unconfigured' ? 'Google sign-in isn’t set up on this server.' : 'Google sign-in failed. Please try again.');
       window.history.replaceState(null, '', '/login');
     }
   }, []);
 
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setLoading(true);
     try {
       const res = await fetch(`/api/auth/${mode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mode === 'signup' ? { name, email, password } : { email, password }),
+        body: JSON.stringify(mode === 'signup' ? { name, email, password } : mode === 'login' ? { email, password } : { email }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? 'Something went wrong');
+        return;
+      }
+      if (mode === 'forgot') {
+        setNotice('If that email has a SABA account, a reset link is on its way. It works for 1 hour.');
         return;
       }
       router.push('/chat');
@@ -67,26 +88,29 @@ export default function LoginPage() {
           <span className="text-gradient">SABA</span>
         </Link>
 
-        {/* Mode toggle */}
-        <div className="mb-6 grid grid-cols-2 rounded-xl border border-edge bg-wash/[0.03] p-1">
-          {(['login', 'signup'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setMode(m);
-                setError(null);
-              }}
-              className={`rounded-lg py-2 text-sm font-medium transition ${
-                mode === m
-                  ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {m === 'login' ? 'Sign in' : 'Create account'}
-            </button>
-          ))}
-        </div>
+        {mode === 'forgot' ? (
+          <div className="mb-6 text-center">
+            <h1 className="font-display text-lg font-semibold text-slate-100">Reset your password</h1>
+            <p className="mt-1 text-xs text-slate-500">We&apos;ll email you a one-time link.</p>
+          </div>
+        ) : (
+          <div className="mb-6 grid grid-cols-2 rounded-xl border border-edge bg-wash/[0.03] p-1" role="tablist">
+            {(['login', 'signup'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => switchMode(m)}
+                className={`rounded-lg py-2 text-sm font-medium transition ${
+                  mode === m ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {m === 'login' ? 'Sign in' : 'Create account'}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form onSubmit={submit} className="space-y-4">
           {mode === 'signup' && (
@@ -100,6 +124,8 @@ export default function LoginPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="What should SABA call you?"
+                maxLength={80}
+                autoComplete="name"
                 required
               />
             </div>
@@ -115,60 +141,87 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
+              autoComplete="email"
               required
             />
           </div>
-          <div>
-            <label htmlFor="password" className="mb-1.5 block text-xs font-medium text-slate-400">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              className="input-dark"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
-              minLength={mode === 'signup' ? 8 : undefined}
-              required
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="password" className="text-xs font-medium text-slate-400">
+                  Password
+                </label>
+                {mode === 'login' && config?.email && (
+                  <button type="button" onClick={() => switchMode('forgot')} className="text-[11px] text-violet-300 hover:underline">
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <input
+                id="password"
+                type="password"
+                className="input-dark"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === 'signup' ? 'At least 8 characters' : '••••••••'}
+                minLength={mode === 'signup' ? 8 : undefined}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                required
+              />
+            </div>
+          )}
 
           {error && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300" role="alert">
               {error}
+            </p>
+          )}
+          {notice && (
+            <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300" role="status">
+              {notice}
             </p>
           )}
 
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {mode === 'login' ? 'Sign in' : 'Create account'}
+            {mode === 'login' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
           </button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wide text-slate-600">
-          <span className="h-px flex-1 bg-edge" />
-          or
-          <span className="h-px flex-1 bg-edge" />
-        </div>
-
-        <a
-          href="/api/auth/google"
-          className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-edge bg-wash/[0.04] py-2.5 text-sm font-medium text-slate-200 transition hover:bg-wash/[0.08]"
-        >
-          <GoogleLogo />
-          Continue with Google
-        </a>
+        {config?.google && mode !== 'forgot' && (
+          <>
+            <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wide text-slate-600">
+              <span className="h-px flex-1 bg-edge" />
+              or
+              <span className="h-px flex-1 bg-edge" />
+            </div>
+            <a
+              href="/api/auth/google"
+              className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-edge bg-wash/[0.04] py-2.5 text-sm font-medium text-slate-200 transition hover:bg-wash/[0.08]"
+            >
+              <GoogleLogo />
+              Continue with Google
+            </a>
+          </>
+        )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-            className="font-medium text-violet-300 hover:underline"
-          >
-            {mode === 'login' ? 'Create an account' : 'Sign in instead'}
-          </button>
+          {mode === 'forgot' ? (
+            <button type="button" onClick={() => switchMode('login')} className="font-medium text-violet-300 hover:underline">
+              Back to sign in
+            </button>
+          ) : (
+            <>
+              {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}
+              <button
+                type="button"
+                onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+                className="font-medium text-violet-300 hover:underline"
+              >
+                {mode === 'login' ? 'Create an account' : 'Sign in instead'}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>

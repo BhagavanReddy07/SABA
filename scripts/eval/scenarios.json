@@ -1,0 +1,176 @@
+{
+  "about": "SABA Bench personas. Each plants facts over several sessions (with distractor chats and a life update), then asks probes in fresh incognito chats. `expect` is a list of groups; a probe passes when every group has at least one match (case-insensitive) and no `forbid` term appears. Probe types: recall (stated once), cross (combines sessions), update (a fact changed), temporal (what was true before), moment (something from a past chat that was never a fact about the user — only semantic recall can bring it back), abstain (never said — the right answer is not knowing).",
+  "personas": [
+    {
+      "name": "Priya",
+      "sessions": [
+        [
+          "Hi! I'm Priya, a product designer at a fintech startup in Bengaluru.",
+          "My sister Ananya's birthday is on May 3 and she loves orchids.",
+          "I'm vegetarian, and I'm allergic to cashews."
+        ],
+        [
+          "Can you explain what a Roth IRA is, briefly?"
+        ],
+        [
+          "I've started training for the Mumbai half-marathon in January.",
+          "My dog is a beagle named Biscuit."
+        ],
+        [
+          "Give me three tips for writing clearer emails."
+        ],
+        [
+          "Big news — I just moved from Bengaluru to Pune for a new job at Freshworks.",
+          "Also, I quit coffee; it's green tea for me now."
+        ]
+      ],
+      "probes": [
+        {
+          "type": "recall",
+          "q": "What do I do for work, and what's my name?",
+          "expect": [
+            [
+              "priya"
+            ],
+            [
+              "designer"
+            ]
+          ]
+        },
+        {
+          "type": "recall",
+          "q": "When is my sister's birthday?",
+          "expect": [
+            [
+              "may 3",
+              "3 may",
+              "may 3rd",
+              "3rd may",
+              "3rd of may"
+            ]
+          ]
+        },
+        {
+          "type": "recall",
+          "q": "What's my dog called and what breed is it?",
+          "expect": [
+            [
+              "biscuit"
+            ],
+            [
+              "beagle"
+            ]
+          ]
+        },
+        {
+          "type": "cross",
+          "q": "I want to buy my sister a birthday present — any idea what she'd like?",
+          "expect": [
+            [
+              "orchid"
+            ]
+          ]
+        },
+        {
+          "type": "cross",
+          "q": "Suggest a snack for my long run this weekend that suits my diet.",
+          "expect": [
+            [
+              "vegetarian",
+              "veg",
+              "plant",
+              "dairy",
+              "banana",
+              "dates",
+              "oat",
+              "peanut",
+              "almond",
+              "fruit",
+              "energy"
+            ]
+          ],
+          "forbid": [
+            "cashew bar",
+            "cashew butter",
+            "cashews are a great"
+          ]
+        },
+        {
+          "type": "update",
+          "q": "Which city do I live in now?",
+          "expect": [
+            [
+              "pune"
+            ]
+          ]
+        },
+        {
+          "type": "update",
+          "q": "Where do I work now?",
+          "expect": [
+            [
+              "freshworks"
+            ]
+          ]
+        },
+        {
+          "type": "update",
+          "q": "What do I drink in the morning these days?",
+          "expect": [
+            [
+              "green tea",
+              "tea"
+            ]
+          ]
+        },
+        {
+          "type": "temporal",
+          "q": "Where did I live before my current city?",
+          "expect": [
+            [
+              "bengaluru",
+              "bangalore"
+            ]
+          ]
+        },
+        {
+          "type": "moment",
+          "q": "Which kind of retirement account did you explain to me a while ago?",
+          "expect": [
+            [
+              "roth"
+            ]
+          ]
+        },
+        {
+          "type": "moment",
+          "q": "What kind of writing did I ask you for tips on recently?",
+          "expect": [
+            [
+              "email",
+              "e-mail"
+            ]
+          ]
+        },
+        {
+          "type": "abstain",
+          "q": "What's my brother's name?",
+          "expect": [
+            [
+              "don't",
+              "do not",
+              "haven't",
+              "not sure",
+              "no record",
+              "didn't",
+              "not mentioned",
+              "unknown",
+              "don’t",
+              "haven’t"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

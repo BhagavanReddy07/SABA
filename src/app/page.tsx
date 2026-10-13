@@ -1,18 +1,24 @@
 import Link from 'next/link';
 import {
+  Activity,
   ArrowRight,
+  AudioLines,
+  BellRing,
   BrainCircuit,
   Database,
-  Download,
+  FileText,
   Github,
+  History,
   Layers,
   MessageSquareText,
-  Mic,
-  Moon,
+  Orbit,
+  Plug,
+  Quote,
   Rocket,
   ScanSearch,
+  ShieldCheck,
   Sparkles,
-  Volume2,
+  Sun,
   Waypoints,
   Zap,
 } from 'lucide-react';
@@ -37,7 +43,7 @@ const TIERS = [
     icon: Waypoints,
     store: 'Pinecone',
     title: 'Tier 3 · Semantic memory',
-    body: 'Messages and facts are embedded with Gemini and indexed as vectors. SABA recalls relevant moments from any past conversation by meaning, not keywords.',
+    body: 'Messages, facts and your documents are embedded and indexed as vectors (Pinecone, or pgvector in the same Postgres). SABA recalls relevant moments from any past conversation by meaning, not keywords.',
     accent: 'from-fuchsia-500/20 to-fuchsia-500/0 text-fuchsia-300',
   },
 ];
@@ -51,26 +57,31 @@ const PIPELINE = [
   {
     icon: MessageSquareText,
     title: 'Generate',
-    body: 'Gemini streams the answer token by token, with your history, facts, and similar past moments in context.',
+    body: 'The fastest available model (Groq, with Gemini as fallback) streams the answer — calling tools when it needs to act or look something up, and citing the memories it used.',
   },
   {
     icon: Layers,
     title: 'Remember',
-    body: 'The exchange is persisted, embedded, and mined for new facts — asynchronously.',
+    body: 'The exchange is persisted and embedded, and new facts are reconciled with what SABA already knows — updated, not duplicated.',
   },
 ];
 
 const FEATURES = [
-  { icon: Zap, title: 'Streaming replies', body: 'Answers appear word by word, the moment generation starts.' },
-  { icon: ScanSearch, title: 'Memory trace', body: 'Every reply shows exactly what was recalled from each tier.' },
-  { icon: Rocket, title: 'Smart actions', body: '“Play it on Spotify”, “open the trailer”, “write a mail” — SABA opens the right app for you.' },
-  { icon: Mic, title: 'Voice input', body: 'Talk instead of typing — right in the browser, no plugins.' },
-  { icon: Volume2, title: 'Read aloud', body: 'Any reply can be spoken back to you with one click.' },
-  { icon: Download, title: 'Export chats', body: 'Download any conversation as clean Markdown.' },
-  { icon: Moon, title: 'Light & dark', body: 'A theme system that follows your OS — or your mood.' },
+  { icon: Quote, title: 'Answers cite your past', body: 'Every claim about you links to where SABA learned it — click to jump to that exact message.' },
+  { icon: History, title: 'Memory that evolves', body: 'Move cities, change jobs: facts update with history kept, and a nightly sleep cycle tidies duplicates.' },
+  { icon: Orbit, title: 'Memory Galaxy', body: 'See everything SABA knows about you as a living 3D map of related memories.' },
+  { icon: ScanSearch, title: 'Memory trace', body: 'Every reply shows exactly what was recalled from each tier, with similarity scores.' },
+  { icon: Rocket, title: 'Actions & live tools', body: 'Plays music, drafts emails and WhatsApps, gets directions, checks weather, does exact math.' },
+  { icon: BellRing, title: 'Reminders everywhere', body: 'By email, Telegram or push — with Done and Snooze right in the notification.' },
+  { icon: Sun, title: 'Morning brief', body: "At 8 AM your time: today's tasks, birthdays coming up and a goal check-in." },
+  { icon: FileText, title: 'Document memory', body: 'Drop in a PDF or notes — SABA reads it into memory and cites the page.' },
+  { icon: AudioLines, title: 'Talk mode', body: 'A hands-free voice conversation in Indian languages and more — no plugins.' },
+  { icon: Plug, title: 'Your memory, anywhere', body: 'The same SABA on Telegram, and your memory inside Claude, Cursor or VS Code via MCP.' },
+  { icon: ShieldCheck, title: 'You stay in control', body: 'Incognito chats, forget anything, export everything, delete your account in one step.' },
+  { icon: Zap, title: 'Fast and free to run', body: 'Streaming replies on free tiers, every service optional — it keeps working if one is down.' },
 ];
 
-const STACK = ['Next.js 15', 'TypeScript', 'PostgreSQL', 'Redis', 'Pinecone', 'Gemini', 'Tailwind CSS'];
+const STACK = ['Next.js 15', 'TypeScript', 'PostgreSQL', 'pgvector', 'Redis', 'Pinecone', 'Groq', 'Gemini', 'Tailwind CSS'];
 
 export default function LandingPage() {
   return (
@@ -270,7 +281,10 @@ export default function LandingPage() {
           ))}
         </div>
         <p className="mt-8 text-center text-xs text-slate-600">
-          SABA — a personal AI assistant with context retention · Built by Bhagavan Reddy
+          SABA — a personal AI assistant with context retention · Built by Bhagavan Reddy ·{' '}
+          <Link href="/stats" className="inline-flex items-center gap-1 text-slate-500 hover:text-violet-300">
+            <Activity className="h-3 w-3" /> Live stats
+          </Link>
         </p>
       </footer>
     </div>

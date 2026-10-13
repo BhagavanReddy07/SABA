@@ -6,6 +6,7 @@
 
 - [ ] `npm run typecheck` passes
 - [ ] `npm run lint` passes
+- [ ] `npm test` passes (and `npm run eval` if memory behaviour changed)
 - [ ] Tested in the browser (`npm run dev`)
 
 ## Screenshots (for UI changes)
