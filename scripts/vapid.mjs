@@ -1,0 +1,9 @@
+// Generates a VAPID key pair for web push. Paste the output into .env (and your host's env vars).
+import { createECDH } from 'node:crypto';
+
+const ecdh = createECDH('prime256v1');
+ecdh.generateKeys();
+const pad = (b) => Buffer.concat([Buffer.alloc(32 - b.length), b]);
+console.log(`VAPID_PUBLIC_KEY=${ecdh.getPublicKey().toString('base64url')}`);
+console.log(`VAPID_PRIVATE_KEY=${pad(ecdh.getPrivateKey()).toString('base64url')}`);
+console.log('VAPID_SUBJECT=mailto:you@example.com');

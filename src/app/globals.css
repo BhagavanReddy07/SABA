@@ -296,3 +296,90 @@ body {
     transform: none;
   }
 }
+
+/* A message opened from a citation, search hit or "learned in…" link flashes once */
+@keyframes saba-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  20%,
+  60% {
+    background: rgba(139, 92, 246, 0.14);
+  }
+}
+.saba-flash {
+  border-radius: 1rem;
+  animation: saba-flash 2.4s ease-in-out;
+}
+
+/* Markdown on the public share page */
+.prose-saba p {
+  margin-bottom: 0.5rem;
+}
+.prose-saba p:last-child {
+  margin-bottom: 0;
+}
+.prose-saba ul,
+.prose-saba ol {
+  margin-bottom: 0.5rem;
+  padding-left: 1.25rem;
+}
+.prose-saba ul {
+  list-style: disc;
+}
+.prose-saba ol {
+  list-style: decimal;
+}
+.prose-saba strong {
+  font-weight: 600;
+  color: rgb(var(--slate-100));
+}
+.prose-saba a {
+  color: rgb(196 181 253);
+  text-decoration: underline;
+}
+.prose-saba code {
+  border-radius: 0.25rem;
+  background: rgb(var(--wash) / 0.1);
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saba-flash {
+    animation: none;
+    outline: 1px solid rgba(139, 92, 246, 0.5);
+  }
+}
+
+/* Light mode: the pale accent text tuned for the dark theme fails contrast on white — deepen it.
+   (Icons share these classes; the darker shades read fine as icons too.) */
+.light .text-violet-200,
+.light .text-violet-300 {
+  color: rgb(109 40 217);
+}
+.light .text-violet-400 {
+  color: rgb(124 58 237);
+}
+.light .text-fuchsia-300 {
+  color: rgb(162 28 175);
+}
+.light .text-cyan-300 {
+  color: rgb(14 116 144);
+}
+.light .text-emerald-300,
+.light .text-emerald-400 {
+  color: rgb(4 120 87);
+}
+.light .text-amber-300,
+.light .text-amber-400 {
+  color: rgb(180 83 9);
+}
+.light .text-pink-300 {
+  color: rgb(190 24 93);
+}
+.light .text-red-300,
+.light .text-red-400 {
+  color: rgb(185 28 28);
+}

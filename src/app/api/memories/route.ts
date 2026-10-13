@@ -1,28 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/server/auth';
-import { listMemories, saveMemory } from '@/server/db';
-import { storeEmbedding } from '@/server/memory/semantic';
-import { handle, badRequest } from '@/server/http';
+import { listMemories } from '@/server/db';
+import { addManualMemory } from '@/server/memory';
+import { badRequest, handle, readJson } from '@/server/http';
 
-export const GET = handle(async () => {
+/** Current memories; `?history=1` adds superseded/retired ones (for the per-fact history view). */
+export const GET = handle(async (request: NextRequest) => {
   const user = await requireUser();
-  return NextResponse.json({ memories: await listMemories(user.id) });
+  const history = request.nextUrl.searchParams.get('history') === '1';
+  return NextResponse.json({ memories: await listMemories(user.id, history) });
 });
 
 export const POST = handle(async (request: NextRequest) => {
   const user = await requireUser();
-  const { content, category } = await request.json();
-
-  if (typeof content !== 'string' || !content.trim()) {
-    return badRequest('Content is required');
+  const { content, category } = await readJson(request);
+  if (typeof content !== 'string' || !content.trim() || content.length > 500) {
+    return badRequest('Content is required (max 500 characters)');
   }
-  const validCategory = ['fact', 'preference', 'goal'].includes(category)
-    ? category
-    : 'fact';
-
-  const memory = await saveMemory(user.id, content.trim(), validCategory, 'manual');
-  // Manual memories join Tier 3 too, so semantic recall can surface them.
-  void storeEmbedding(`memory-${memory.id}`, user.id, memory.content, 'memory');
-
+  const validCategory = category === 'preference' || category === 'goal' ? category : 'fact';
+  // Manual memories join Tier 3 too (via after(), so the embedding survives the response).
+  const { memory } = await addManualMemory(user.id, content.trim(), validCategory, (work) =>
+    after(() => work.catch(() => {}))
+  );
   return NextResponse.json({ memory });
 });

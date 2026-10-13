@@ -1,37 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listDueTasks, markTaskReminded } from '@/server/db';
-import { hasEmailKey, sendReminderEmail } from '@/server/email';
+import { cronTick } from '@/server/pulse';
 
-// Hit every few minutes by an external free cron (cron-job.org):
-//   GET /api/cron/reminders?key=<CRON_SECRET>
-// Sends reminder emails for due tasks, then marks them so they aren't re-sent
-// (snoozing clears the mark and pushes due_at, so the next run re-sends).
+// The one scheduler: an external free cron (cron-job.org) calls this every ~5 minutes:
+//   GET /api/cron/reminders?key=<CRON_SECRET>      (or Authorization: Bearer <CRON_SECRET>)
+// Each tick delivers due reminders (email / Telegram / push), sends morning briefs at the
+// user's local 8 AM, and runs nightly memory consolidation — see src/server/pulse.ts.
+
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const key = request.nextUrl.searchParams.get('key');
-  const bearer = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || (key !== process.env.CRON_SECRET && bearer !== process.env.CRON_SECRET)) {
+  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  const secret = process.env.CRON_SECRET;
+  if (!secret || (key !== secret && bearer !== secret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (!hasEmailKey()) {
-    return NextResponse.json({ error: 'BREVO_API_KEY / BREVO_FROM not configured' }, { status: 503 });
+  try {
+    return NextResponse.json(await cronTick(request.nextUrl.origin));
+  } catch (err) {
+    console.error('[cron]', err);
+    return NextResponse.json({ error: 'Tick failed' }, { status: 500 });
   }
-
-  const baseUrl = request.nextUrl.origin;
-  const due = await listDueTasks();
-  let sent = 0;
-  const errors: string[] = [];
-
-  for (const task of due) {
-    try {
-      await sendReminderEmail(task, baseUrl);
-      await markTaskReminded(task.id);
-      sent++;
-    } catch (err) {
-      errors.push(`${task.id}: ${(err as Error).message}`);
-    }
-  }
-
-  if (errors.length) console.error('[cron/reminders]', errors);
-  return NextResponse.json({ due: due.length, sent, failed: errors.length });
 }

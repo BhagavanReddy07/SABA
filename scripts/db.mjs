@@ -23,7 +23,9 @@ await client.connect();
 if (process.argv[2] === 'reset') {
   console.log('Dropping all tables...');
   await client.query(
-    'DROP TABLE IF EXISTS tasks, memories, messages, conversations, users CASCADE'
+    `DROP TABLE IF EXISTS memory_vectors, turn_metrics, rate_limits, google_tokens,
+       push_subscriptions, access_tokens, document_chunks, documents, goal_logs,
+       tasks, memories, messages, conversations, users CASCADE`
   );
 }
 

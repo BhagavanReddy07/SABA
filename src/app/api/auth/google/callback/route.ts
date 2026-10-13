@@ -1,28 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setSessionCookie } from '@/server/auth';
+import { getSessionUser, setSessionCookie } from '@/server/auth';
+import { CALENDAR_SCOPE } from '@/server/calendar';
 import {
   createGoogleUser,
   getUserByEmail,
   getUserByGoogleId,
   linkGoogleId,
+  saveGoogleToken,
 } from '@/server/db';
+import { seal } from '@/server/tokens';
 
-// Step 2 of Google sign-in: Google redirects back here with a one-time code.
-// Exchange it for tokens, fetch the profile, find-or-create the user, set the
-// session cookie, land on /chat. Any failure bounces to /login?error=google.
+// Step 2 of Google OAuth: Google redirects back here with a one-time code.
+// Sign-in: code → tokens → profile → find, link or create the user → session → /chat.
+// Calendar: code → refresh token (sealed) stored for the signed-in user → /chat?calendar=connected.
 
 const STATE_COOKIE = 'saba_oauth_state';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const fail = (reason: string): NextResponse => {
-    console.error('[auth/google]', reason);
-    const res = NextResponse.redirect(new URL('/login?error=google', request.nextUrl.origin));
+  const origin = request.nextUrl.origin;
+  const state = request.nextUrl.searchParams.get('state');
+  const calendar = state?.startsWith('cal.') ?? false;
+  const done = (path: string) => {
+    const res = NextResponse.redirect(new URL(path, origin));
     res.cookies.delete(STATE_COOKIE);
     return res;
   };
+  const fail = (reason: string): NextResponse => {
+    console.error('[auth/google]', reason);
+    return done(calendar ? '/chat?calendar=failed' : '/login?error=google');
+  };
 
   const code = request.nextUrl.searchParams.get('code');
-  const state = request.nextUrl.searchParams.get('state');
   const cookieState = request.cookies.get(STATE_COOKIE)?.value;
   if (!code || !state || !cookieState || state !== cookieState) {
     return fail('missing code or state mismatch');
@@ -36,7 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID ?? '',
       client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      redirect_uri: `${request.nextUrl.origin}/api/auth/google/callback`,
+      redirect_uri: `${origin}/api/auth/google/callback`,
       grant_type: 'authorization_code',
     }),
     signal: AbortSignal.timeout(10_000),
@@ -44,13 +52,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!tokenRes.ok) {
     return fail(`token exchange ${tokenRes.status}: ${(await tokenRes.text()).slice(0, 300)}`);
   }
-  const { access_token: accessToken } = await tokenRes.json();
-  if (typeof accessToken !== 'string') return fail('no access_token in response');
+  const tokens = await tokenRes.json();
+  if (typeof tokens.access_token !== 'string') return fail('no access_token in response');
+
+  if (calendar) {
+    const user = await getSessionUser();
+    if (!user) return fail('calendar connect without a session');
+    if (typeof tokens.refresh_token !== 'string' || !String(tokens.scope ?? '').includes(CALENDAR_SCOPE)) {
+      return fail('calendar scope or refresh token not granted');
+    }
+    await saveGoogleToken(user.id, seal(tokens.refresh_token), String(tokens.scope));
+    return done('/chat?calendar=connected');
+  }
 
   // Token → profile. Fetched straight from Google over TLS, so no JWT
   // verification is needed (we never trust a token from the browser).
   const profileRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-    headers: { authorization: `Bearer ${accessToken}` },
+    headers: { authorization: `Bearer ${tokens.access_token}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (!profileRes.ok) return fail(`userinfo ${profileRes.status}`);
@@ -64,18 +82,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     let user = await getUserByGoogleId(sub);
     if (!user) {
-      user = await getUserByEmail(email);
-      if (user) {
-        await linkGoogleId(user.id, sub);
+      const existing = await getUserByEmail(email);
+      if (existing) {
+        await linkGoogleId(existing.id, sub);
+        user = existing;
       } else {
-        user = await createGoogleUser(email, typeof name === 'string' && name ? name : email.split('@')[0], sub);
+        user = await createGoogleUser(email, typeof name === 'string' && name ? name.slice(0, 80) : email.split('@')[0], sub);
       }
     }
-    await setSessionCookie(user.id);
+    await setSessionCookie(user);
   } catch (err) {
     return fail(`user lookup/create failed: ${(err as Error).message}`);
   }
-  const res = NextResponse.redirect(new URL('/chat', request.nextUrl.origin));
-  res.cookies.delete(STATE_COOKIE);
-  return res;
+  return done('/chat');
 }

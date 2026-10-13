@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:15
+    # Postgres 15 with pgvector (same data format as postgres:15) — Tier 3 works without Pinecone
+    image: pgvector/pgvector:pg15
     container_name: saba-postgres
     restart: unless-stopped
     environment:

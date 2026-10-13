@@ -2,6 +2,48 @@
 
 import { useEffect, useRef } from 'react';
 
+export type Point3 = { x: number; y: number; z: number };
+
+/** Fibonacci sphere: `n` evenly distributed points on the unit sphere, spiralling top to bottom. */
+export function fibonacciSphere(n: number): Point3[] {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  return Array.from({ length: n }, (_, i) => {
+    const y = n > 1 ? 1 - (i / (n - 1)) * 2 : 0;
+    const r = Math.sqrt(1 - y * y);
+    const theta = golden * i;
+    return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
+  });
+}
+
+/**
+ * Rotates unit-sphere points by `yaw` (around Y) then `pitch` (around X) and perspective-projects
+ * them onto the canvas. `depth` runs from -1 (facing the viewer) to 1 (far side).
+ */
+export function projector(yaw: number, pitch: number, cx: number, cy: number, radius: number) {
+  const fov = 2.4;
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosX = Math.cos(pitch), sinX = Math.sin(pitch);
+  return ({ x, y, z }: Point3) => {
+    const x1 = x * cosY + z * sinY;
+    const z1 = -x * sinY + z * cosY;
+    const y1 = y * cosX - z1 * sinX;
+    const z2 = y * sinX + z1 * cosX;
+    const scale = fov / (fov + z2);
+    return { sx: cx + x1 * radius * scale, sy: cy + y1 * radius * scale, depth: z2 };
+  };
+}
+
+/** Sizes the backing store to the CSS box × devicePixelRatio (capped at 2) so lines stay crisp. */
+export function fitCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { width, height };
+}
+
 // A 3D "neural globe": particles on a sphere, perspective-projected and
 // slowly rotating, with lines between nearby nodes. Vanilla canvas — no deps.
 export function NeuralCanvas({ className }: { className?: string }) {
@@ -17,16 +59,7 @@ export function NeuralCanvas({ className }: { className?: string }) {
 
     const NODE_COUNT = 170;
     const LINK_DISTANCE = 0.62;
-    const nodes: { x: number; y: number; z: number }[] = [];
-
-    // Fibonacci sphere: evenly distributed points.
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    for (let i = 0; i < NODE_COUNT; i++) {
-      const y = 1 - (i / (NODE_COUNT - 1)) * 2;
-      const r = Math.sqrt(1 - y * y);
-      const theta = golden * i;
-      nodes.push({ x: Math.cos(theta) * r, y, z: Math.sin(theta) * r });
-    }
+    const nodes = fibonacciSphere(NODE_COUNT);
 
     // Node-to-node distances are constant under rotation, so the link
     // pairs can be computed once instead of every frame.
@@ -46,12 +79,7 @@ export function NeuralCanvas({ className }: { className?: string }) {
     let width = 0;
     let height = 0;
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = canvas.clientWidth;
-      height = canvas.clientHeight;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ({ width, height } = fitCanvas(canvas, ctx));
     };
     resize();
     window.addEventListener('resize', resize);
@@ -78,25 +106,9 @@ export function NeuralCanvas({ className }: { className?: string }) {
       tiltX += (targetTiltX - tiltX) * 0.12;
       tiltY += (targetTiltY - tiltY) * 0.12;
 
-      const cx = width / 2;
-      const cy = height / 2;
-      const radius = Math.min(width, height) * 0.36;
-      const fov = 2.4;
-
-      const rotY = angle + tiltY;
-      const rotX = 0.35 + tiltX;
-      const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
-      const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
-
       // Rotate + project every node.
-      const projected = nodes.map((n) => {
-        const x1 = n.x * cosY + n.z * sinY;
-        const z1 = -n.x * sinY + n.z * cosY;
-        const y1 = n.y * cosX - z1 * sinX;
-        const z2 = n.y * sinX + z1 * cosX;
-        const scale = fov / (fov + z2);
-        return { sx: cx + x1 * radius * scale, sy: cy + y1 * radius * scale, depth: z2 };
-      });
+      const project = projector(angle + tiltY, 0.35 + tiltX, width / 2, height / 2, Math.min(width, height) * 0.36);
+      const projected = nodes.map(project);
 
       ctx.lineWidth = 1;
       for (const link of links) {

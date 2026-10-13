@@ -1,50 +1,27 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { getUserById, type DbUser } from './db';
+import { signToken, verifyToken } from './tokens';
 
-// Stateless signed session token (HMAC-SHA256, stdlib) in an httpOnly cookie.
-// ponytail: no JWT lib — payload is just userId + expiry, HMAC covers it.
+// Stateless signed session token in an httpOnly cookie. Revocation without a sessions
+// table: the token carries users.session_version; bumping it invalidates every session.
 
 const COOKIE = 'saba_session';
 const SESSION_DAYS = 7;
 
-function secret(): string {
-  const s = process.env.AUTH_SECRET;
-  if (!s) throw new Error('AUTH_SECRET is not set');
-  return s;
+export function createSessionToken(user: Pick<DbUser, 'id' | 'sessionVersion'>): string {
+  return signToken({ p: 's', uid: user.id, v: user.sessionVersion }, SESSION_DAYS * 86_400_000);
 }
 
-function sign(payload: string): string {
-  return createHmac('sha256', secret()).update(payload).digest('base64url');
+/** Accepts pre-versioning tokens ({uid, exp}) as version 0 so nobody is logged out by a deploy. */
+export function verifySessionToken(token: string): { userId: string; version: number } | null {
+  const payload = verifyToken<{ p?: unknown; uid?: unknown; v?: unknown }>(token);
+  if (!payload || (payload.p !== undefined && payload.p !== 's')) return null;
+  if (typeof payload.uid !== 'string') return null;
+  return { userId: payload.uid, version: typeof payload.v === 'number' ? payload.v : 0 };
 }
 
-export function createSessionToken(userId: string): string {
-  const payload = Buffer.from(
-    JSON.stringify({ uid: userId, exp: Date.now() + SESSION_DAYS * 86_400_000 })
-  ).toString('base64url');
-  return `${payload}.${sign(payload)}`;
-}
-
-export function verifySessionToken(token: string): string | null {
-  const [payload, sig] = token.split('.');
-  if (!payload || !sig) return null;
-  const expected = sign(payload);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  try {
-    const { uid, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    if (typeof uid !== 'string' || typeof exp !== 'number' || Date.now() > exp) {
-      return null;
-    }
-    return uid;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSessionCookie(userId: string): Promise<void> {
-  (await cookies()).set(COOKIE, createSessionToken(userId), {
+export async function setSessionCookie(user: Pick<DbUser, 'id' | 'sessionVersion'>): Promise<void> {
+  (await cookies()).set(COOKIE, createSessionToken(user), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -61,8 +38,10 @@ export async function clearSessionCookie(): Promise<void> {
 export async function getSessionUser(): Promise<DbUser | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
-  const userId = verifySessionToken(token);
-  return userId ? getUserById(userId) : null;
+  const session = verifySessionToken(token);
+  if (!session) return null;
+  const user = await getUserById(session.userId);
+  return user && user.sessionVersion === session.version ? user : null;
 }
 
 /** Returns the logged-in user or throws a 401 the route handlers translate. */

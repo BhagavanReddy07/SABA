@@ -1,192 +1,299 @@
-// The chat pipeline: recall memory → generate (streamed) → remember.
+// The chat pipeline: recall memory → generate with tools (streamed) → remember.
 
 import { after } from 'next/server';
-import type { ChatAction, ChatStreamEvent } from '@/lib/types';
+import type {
+  ChatStreamEvent,
+  MemorySource,
+  MemoryTrace,
+  MemoryUpdate,
+  MessageImage,
+  MessageMeta,
+  ToolStep,
+} from '@/lib/types';
 import {
   createConversation,
-  createTask,
-  findPendingReminder,
+  deleteLastTurn,
   getConversation,
+  recordTurnMetrics,
   renameConversation,
   saveMessage,
+  setMemorySource,
   touchConversation,
+  type DbUser,
 } from './db';
-import { generateText, generateTextStream, hasChatKey } from './gemini';
-import { recall, remember, type Recall } from './memory';
+import { generateText, hasChatKey, streamChat, type ChatMessage, type ToolCall } from './llm';
+import { recall, remember, withTimeout, type Defer, type Tiers } from './memory';
+import { dropWindow } from './memory/working';
+import { removeVectors } from './memory/vectors';
+import { describeSource, formatWhen, runTool, toolLabel, toolSpecs, type ToolContext } from './tools';
+
+const MAX_TOOL_ROUNDS = 4;
+const MAX_CALLS_PER_ROUND = 6;
+/** Messages that clearly ask SABA to *do* something stateful — the first round must call a tool. */
+const ACTION_REQUEST =
+  /\b(remind me|set (a |an )?(reminder|alarm|timer)|add (a |an )?(task|to-?do|reminder)|put .{1,40} on my (list|calendar)|forget (that|about|my|the|what)|remember (that|this|my)|mark .{1,40} (as )?(done|complete))\b/i;
+/** Arithmetic models get wrong in their head (dropped digits) — it goes to the calculator. No bare - or /: dates, phones, ranges. */
+const MATH_REQUEST =
+  /\d\s*(%|percent)\s*of\s*\d|\d\s*[+*×÷^]\s*\d|\d\s+(times|plus|divided by|multiplied by)\s+\d|\b(calculate|compute|square root)\b.*\d/i;
+
+export type ChatInput = {
+  user: DbUser;
+  message: string;
+  conversationId?: string;
+  /** Browser's `new Date().toString()` — local time with offset, for "remind me at 6pm". */
+  clientTime?: string;
+  images?: MessageImage[];
+  /** Only applies when a new conversation is created. */
+  incognito?: boolean;
+  /** Regenerate / edit-and-resend: drop the last user turn and its reply first. */
+  replaceLastTurn?: boolean;
+  /** SABA Bench ablations only — which memory tiers recall may read. */
+  tiers?: Tiers;
+  signal?: AbortSignal;
+  /** Where post-response work is registered; defaults to Next's after(). */
+  defer?: Defer;
+  channel?: 'web' | 'telegram';
+};
+
+/** Background work survives the response on serverless hosts (Vercel) via after(). */
+const afterDefer: Defer = (work) =>
+  after(() => work.catch((err) => console.warn('[deferred]', (err as Error)?.message ?? err)));
 
 /**
  * Runs one chat turn, yielding events the route serializes as SSE:
- *   start → delta* → done   (or error)
+ *   start → (delta | tool)* → done → title? → memory?     (or error)
  */
-export async function* chatStream(
-  userId: string,
-  userName: string,
-  input: string,
-  conversationId?: string,
-  clientTime?: string
-): AsyncGenerator<ChatStreamEvent> {
-  // Resolve or create the conversation (title = first message until AI titles it).
-  let conversation = conversationId
-    ? await getConversation(conversationId, userId)
-    : null;
+export async function* chatStream(input: ChatInput): AsyncGenerator<ChatStreamEvent> {
+  const started = Date.now();
+  const { user, signal } = input;
+  const defer = input.defer ?? afterDefer;
+  const timezone = user.timezone ?? 'UTC';
+  const text = input.message.trim();
+
+  let conversation = input.conversationId ? await getConversation(input.conversationId, user.id) : null;
   const isNew = !conversation;
   if (!conversation) {
-    const title = input.length > 48 ? `${input.slice(0, 48)}…` : input;
-    conversation = await createConversation(userId, title);
+    const title = text ? (text.length > 48 ? `${text.slice(0, 48)}…` : text) : 'Image';
+    conversation = await createConversation(user.id, title, Boolean(input.incognito));
+  } else if (input.replaceLastTurn) {
+    const removed = await deleteLastTurn(conversation.id);
+    await dropWindow(conversation.id); // rebuilt from Postgres on the recall below
+    defer(removeVectors(removed));
   }
 
-  const memory = await recall(userId, conversation.id, input);
-  yield {
-    type: 'start',
-    conversationId: conversation.id,
-    title: conversation.title,
-    trace: memory.trace,
-  };
+  const memory = await recall(user.id, conversation.id, text, input.tiers, defer);
+  yield { type: 'start', conversation, trace: memory.trace };
 
+  const ctx: ToolContext = {
+    userId: user.id,
+    timezone,
+    sources: memory.sources,
+    actions: [],
+    tasks: [],
+    taskRefs: new Map(),
+    learned: [],
+    forgotten: [],
+    defer,
+    calendar: user.calendarLinked,
+    incognito: conversation.incognito,
+    memorySearch: !input.tiers || (input.tiers.t2 && input.tiers.t3),
+    userMessage: text,
+    channel: 'chat',
+  };
+  const steps: ToolStep[] = [];
+  const system = buildSystemPrompt(user.name, memory.sources, input.clientTime, timezone, input.channel);
   let reply = '';
+  let model: string | undefined;
+  let fallbacks = 0;
+  let firstToken: number | null = null;
+  let failed = false;
+
   if (hasChatKey()) {
+    const messages: ChatMessage[] = [
+      ...fitWindow(memory.window),
+      { role: 'user', content: text || 'What is in this image?', images: input.images },
+    ];
+    let tools = toolSpecs({ calendar: user.calendarLinked, incognito: conversation.incognito, memorySearch: ctx.memorySearch });
+    let prefer: string | undefined;
+    // A clear action request must produce a tool call — models otherwise sometimes just *say* "done" (or do the math themselves).
+    const mustAct = ACTION_REQUEST.test(text) || MATH_REQUEST.test(text);
+    let nudged = false;
     try {
-      for await (const chunk of generateTextStream(
-        buildSystemPrompt(userName, memory, clientTime),
-        input
-      )) {
-        reply += chunk;
-        yield { type: 'delta', text: chunk };
+      for (let round = 0; round < MAX_TOOL_ROUNDS && !signal?.aborted; round++) {
+        // The last round offers no tools, which forces a written answer.
+        const offer = round < MAX_TOOL_ROUNDS - 1 ? tools : [];
+        const toolChoice = round === 0 && mustAct && offer.length ? 'required' : 'auto';
+        // Not every provider enforces "required" (gpt-oss on Groq can still just answer), so a forced
+        // round's text is held back until we know it really skipped the tool.
+        const forced = toolChoice === 'required';
+        let held = '';
+        let roundText = '';
+        let calls: ToolCall[] = [];
+        try {
+          const roundSystem = nudged ? `${system}\n\nThis request needs a tool call: call the right tool now instead of answering.` : system;
+          for await (const event of streamChat({ system: roundSystem, messages, tools: offer, signal, prefer, toolChoice })) {
+            if (event.type === 'model') {
+              if (round === 0) fallbacks = event.fallbacks;
+              model ??= event.model;
+              prefer = event.model;
+            } else if (event.type === 'text') {
+              if (forced) {
+                held += event.text;
+                continue;
+              }
+              if (!roundText && reply && !reply.endsWith('\n')) {
+                reply += '\n\n';
+                yield { type: 'delta', text: '\n\n' };
+              }
+              roundText += event.text;
+              reply += event.text;
+              firstToken ??= Date.now() - started;
+              yield { type: 'delta', text: event.text };
+            } else {
+              calls = event.calls;
+            }
+          }
+        } catch (err) {
+          // Every model rejected the tool-enabled request (e.g. a malformed call) — answer without tools.
+          if (offer.length && !roundText && !signal?.aborted) {
+            console.warn('[assistant] tool request failed, retrying without tools:', (err as Error).message);
+            tools = [];
+            round--;
+            continue;
+          }
+          throw err;
+        }
+        if (forced && !calls.length && !signal?.aborted) {
+          if (!nudged) {
+            nudged = true; // ask once more, explicitly
+            round--;
+            continue;
+          }
+          reply = held; // asked twice and still no tool call: the written answer stands
+          firstToken ??= Date.now() - started;
+          if (held) yield { type: 'delta', text: held };
+        }
+        if (!calls.length || signal?.aborted) break;
+
+        messages.push({ role: 'assistant', content: roundText, toolCalls: calls });
+        for (const [i, call] of calls.entries()) {
+          if (i >= MAX_CALLS_PER_ROUND) {
+            messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: 'Skipped: too many calls at once.' });
+            continue;
+          }
+          const step: ToolStep = { id: `${round}-${i}`, name: call.name, label: toolLabel(call), status: 'running' };
+          steps.push(step);
+          yield { type: 'tool', step: { ...step } };
+          const result = await runTool(call, ctx);
+          step.status = result.ok ? 'done' : 'error';
+          step.summary = result.summary;
+          yield { type: 'tool', step: { ...step } };
+          messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: result.content });
+        }
+      }
+      if (!reply.trim() && !signal?.aborted) {
+        reply = steps.some((s) => s.status === 'done') ? 'Done ✓' : "I couldn't come up with a reply — please try again.";
+        yield { type: 'delta', text: reply };
       }
     } catch (err) {
       console.error('[assistant] generation failed:', err);
-      reply =
-        "I'm having trouble reaching my language model right now — please try again in a moment.";
-      yield { type: 'delta', text: reply };
+      failed = true;
+      const note = "I'm having trouble reaching my language model right now — please try again in a moment.";
+      const delta = reply ? `\n\n${note}` : note;
+      reply += delta;
+      yield { type: 'delta', text: delta };
     }
   } else {
-    reply = demoReply(memory);
+    reply = demoReply(memory.trace);
     yield { type: 'delta', text: reply };
   }
 
-  // The model may end its reply with an [[action:{...}]] tag — extract and strip it.
-  const { cleaned, action } = extractAction(reply);
-  reply = cleaned;
+  const stopped = Boolean(signal?.aborted);
+  if (stopped && !reply.trim()) reply = '_(stopped)_';
 
-  // Resolve the actual video so the watch page starts playing immediately,
-  // instead of dropping the user on a search-results page.
-  if (action?.type === 'youtube') {
-    action.videoId = await resolveYouTubeVideo(action.query);
-  }
-
-  // Reminders are handled here, not in the browser: create the task now so the
-  // cron emailer picks it up when it's due. The created task rides on the done
-  // event so the tasks panel updates instantly.
-  let createdTask;
-  if (action?.type === 'reminder') {
-    try {
-      const duplicate = await findPendingReminder(userId, action.content, action.dueAt);
-      if (!duplicate) {
-        createdTask = await createTask(userId, {
-          content: action.content,
-          kind: 'reminder',
-          priority: action.priority,
-          dueAt: action.dueAt ?? null,
-        });
-      }
-    } catch (err) {
-      console.error('[assistant] reminder creation failed:', err);
-    }
-  }
-
-  // Tier 2: persist both turns, then update the other tiers.
-  const userMessage = await saveMessage(conversation.id, 'user', input);
-  const assistantMessage = await saveMessage(conversation.id, 'assistant', reply);
+  const meta: MessageMeta = {
+    trace: memory.trace,
+    ...(ctx.actions.length && { actions: ctx.actions }),
+    ...(ctx.tasks.length && { tasks: ctx.tasks }),
+    ...(steps.length && { tools: steps }),
+    ...(stopped && { notice: 'Stopped' }),
+    ...(model && { model }),
+  };
+  const userMessage = await saveMessage(
+    conversation.id,
+    'user',
+    text,
+    input.images?.length ? { images: input.images.length } : undefined
+  );
+  const assistantMessage = await saveMessage(conversation.id, 'assistant', reply, meta);
   await touchConversation(conversation.id);
-  await remember(userId, conversation.id, userMessage, reply);
+  if (ctx.learned.length) {
+    await setMemorySource(ctx.learned.map((m) => m.id), userMessage.id);
+    for (const m of ctx.learned) Object.assign(m, { sourceMessageId: userMessage.id, sourceConversationId: conversation.id });
+  }
+  const { update } = await remember({
+    userId: user.id,
+    conversationId: conversation.id,
+    incognito: conversation.incognito,
+    userMessage,
+    assistantContent: reply,
+    defer,
+  });
 
-  // First exchange of a new conversation → ask Gemini for a proper short title.
-  if (isNew && hasChatKey()) {
-    const convId = conversation.id;
-    after(() =>
-      autoTitle(convId, userId, input, reply).catch((err) =>
-        console.warn('[assistant] auto-title failed:', (err as Error).message)
-      )
+  if (!input.tiers) {
+    const facts = memory.sources.filter((s) => s.kind === 'fact').length;
+    defer(
+      recordTurnMetrics({
+        model: model ?? null,
+        fallbacks,
+        ...memory.timings,
+        firstToken,
+        total: Date.now() - started,
+        toolCalls: steps.length,
+        facts,
+        moments: memory.sources.length - facts,
+        promptChars: system.length + memory.window.reduce((n, m) => n + m.content.length, 0) + text.length,
+        replyChars: reply.length,
+        error: failed,
+      })
     );
   }
 
-  yield {
-    type: 'done',
-    message: {
-      ...assistantMessage,
-      memoryTrace: memory.trace,
-      // Reminder actions never reach the client as deep links — they became a task.
-      action: action?.type === 'reminder' ? undefined : action,
-      task: createdTask,
-    },
-  };
-}
+  yield { type: 'done', message: assistantMessage, userMessage };
 
-const ACTION_TYPES = ['youtube', 'spotify', 'maps', 'search', 'mail', 'reminder'] as const;
+  // The reply is final and the composer free again; the stream stays open briefly for these.
+  if (isNew && hasChatKey() && !failed && text) {
+    const titling = autoTitle(conversation.id, user.id, text, reply);
+    defer(titling);
+    const title = await withTimeout(titling, 10_000, null);
+    if (title) yield { type: 'title', conversationId: conversation.id, title };
+  }
+  const learned = await withTimeout(update, 25_000, null);
+  const merged: MemoryUpdate = {
+    learned: [...ctx.learned, ...(learned?.learned ?? [])],
+    updated: learned?.updated ?? [],
+    retired: learned?.retired ?? [],
+    forgotten: ctx.forgotten,
+  };
+  if (merged.learned.length || merged.updated.length || merged.retired.length || merged.forgotten.length) {
+    yield { type: 'memory', update: merged };
+  }
+}
 
 /**
- * First matching video ID from YouTube's public search page — no API key.
- * Best-effort: on any failure the caller falls back to the search URL.
+ * The newest turns that fit ~9k characters (long messages clipped) — free-tier models allow only
+ * a few thousand tokens per minute, and older context is still reachable through recall.
  */
-async function resolveYouTubeVideo(query: string): Promise<string | undefined> {
-  try {
-    const res = await fetch(
-      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-      {
-        headers: { 'accept-language': 'en' },
-        signal: AbortSignal.timeout(4000),
-      }
-    );
-    if (!res.ok) return undefined;
-    const html = await res.text();
-    return html.match(/"videoId":"([\w-]{11})"/)?.[1];
-  } catch {
-    return undefined;
+function fitWindow(window: { role: 'user' | 'assistant'; content: string }[], maxChars = 9000): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  let total = 0;
+  for (const m of [...window].reverse()) {
+    const content = m.content.length > 2000 ? `${m.content.slice(0, 2000)}…` : m.content;
+    if (total + content.length > maxChars && out.length) break;
+    total += content.length;
+    out.unshift({ role: m.role, content });
   }
-}
-
-/** Pulls a trailing [[action:{...}]] tag out of the reply, validating its shape. */
-function extractAction(reply: string): { cleaned: string; action?: ChatAction } {
-  const match = reply.match(/\[\[action:(\{[\s\S]*?\})\]\]\s*$/);
-  if (!match) return { cleaned: reply };
-  const cleaned = reply.slice(0, match.index).trimEnd();
-  try {
-    const parsed = JSON.parse(match[1]);
-    if (!ACTION_TYPES.includes(parsed?.type)) return { cleaned };
-    if (parsed.type === 'reminder') {
-      if (typeof parsed.content !== 'string' || !parsed.content.trim()) return { cleaned };
-      const dueAt =
-        typeof parsed.dueAt === 'string' && !Number.isNaN(Date.parse(parsed.dueAt))
-          ? new Date(parsed.dueAt).toISOString()
-          : undefined;
-      return {
-        cleaned,
-        action: {
-          type: 'reminder',
-          content: parsed.content.trim(),
-          dueAt,
-          priority: ['low', 'medium', 'high'].includes(parsed.priority)
-            ? parsed.priority
-            : undefined,
-        },
-      };
-    }
-    if (parsed.type === 'mail') {
-      return {
-        cleaned,
-        action: {
-          type: 'mail',
-          to: typeof parsed.to === 'string' ? parsed.to : undefined,
-          subject: typeof parsed.subject === 'string' ? parsed.subject : undefined,
-          body: typeof parsed.body === 'string' ? parsed.body : undefined,
-        },
-      };
-    }
-    if (typeof parsed.query !== 'string' || !parsed.query.trim()) return { cleaned };
-    return { cleaned, action: { type: parsed.type, query: parsed.query.trim() } };
-  } catch {
-    return { cleaned };
-  }
+  return out;
 }
 
 async function autoTitle(
@@ -194,89 +301,73 @@ async function autoTitle(
   userId: string,
   userContent: string,
   assistantContent: string
-): Promise<void> {
-  const title = await generateText(
-    'You name chat conversations. Reply with ONLY a title of 2-5 words — no quotes, no punctuation at the end, no prose.',
-    `user: ${userContent.slice(0, 500)}\nassistant: ${assistantContent.slice(0, 500)}`,
-    { temperature: 0.3, maxOutputTokens: 200 }
-  );
-  const cleaned = title.replace(/^["']|["']$/g, '').trim().slice(0, 60);
-  if (cleaned) await renameConversation(conversationId, userId, cleaned);
+): Promise<string | null> {
+  try {
+    const title = await generateText(
+      'You name chat conversations. Reply with ONLY a title of 2-5 words — no quotes, no punctuation at the end, no prose.',
+      `user: ${userContent.slice(0, 500)}\nassistant: ${assistantContent.slice(0, 500)}`,
+      { temperature: 0.3, maxTokens: 30 }
+    );
+    const cleaned = title.replace(/^["'*#\s]+|["'*.\s]+$/g, '').trim().slice(0, 60);
+    if (!cleaned) return null;
+    await renameConversation(conversationId, userId, cleaned);
+    return cleaned;
+  } catch (err) {
+    console.warn('[assistant] auto-title failed:', (err as Error).message);
+    return null;
+  }
 }
 
-function buildSystemPrompt(userName: string, memory: Recall, clientTime?: string): string {
+export function buildSystemPrompt(
+  userName: string,
+  sources: MemorySource[],
+  clientTime: string | undefined,
+  timezone: string,
+  channel: ChatInput['channel'] = 'web'
+): string {
+  const now = clientTime || `${formatWhen(new Date().toISOString(), timezone)} (${timezone})`;
   const sections: string[] = [
-    `You are SABA, a personal AI assistant with a layered long-term memory.
-You are talking to ${userName}. Be warm, concise, and concrete.
-${clientTime ? `The user's current local date & time is: ${clientTime}` : ''}
-Use the memory sections below naturally — reference past context when relevant,
-but never recite memory verbatim or mention "tiers" or "databases".
+    `You are SABA, a personal AI assistant with long-term memory. You are talking with ${userName}.
+Be warm, concise and concrete. Reply in the language the user writes in.
+The user's current local date and time: ${now}.
 
-TAKING ACTIONS:
-When the user clearly asks to play, open, find, or send something in an external app —
-a song (Spotify), a video or trailer (YouTube), an email, a place or directions (Maps),
-or a web search — reply briefly, then end with EXACTLY ONE action tag as the very last
-line, in this exact format (raw JSON, no markdown fences):
-[[action:{"type":"youtube","query":"Blinding Lights The Weeknd official audio"}]]
-Valid types: "youtube" | "spotify" | "maps" | "search" (all take "query"),
-"mail" (takes "to", "subject", "body" — write the complete email in "body"),
-and "reminder" (takes "content", "dueAt", optional "priority": low|medium|high).
-Routing rules:
-- Any "play ..." request — songs, music, videos, trailers — use "youtube" (it starts
-  playing instantly). Use "spotify" ONLY when the user explicitly says Spotify.
-- Make the query specific: include artist/movie names, add "official audio" for songs
-  and "official trailer" for trailers.
-- When the user asks to be reminded of something, or to add a task/todo ("remind me
-  to call mom at 6pm", "add a task to submit the report tomorrow morning"), use
-  "reminder". "content" is a short imperative phrase ("Call mom"). "dueAt" is the
-  due time as full ISO 8601 WITH the user's UTC offset, computed from their current
-  local time above (e.g. "remind me in 20 minutes" → now + 20 min). If no time was
-  given, omit "dueAt". Confirm briefly in your reply, e.g. "Done — I'll email you
-  at 6 PM." Reminders are emailed to the user when due.
-- Emit a reminder action ONLY when the user's LATEST message makes a NEW reminder or
-  task request. If they ask about, confirm, or acknowledge one you already set
-  ("did you set it?", "ok", "thanks"), just answer in plain text — emitting another
-  action tag would create a duplicate reminder.
-Never emit an action tag for ordinary questions or conversation.`,
+MEMORY: The sections below come from your memory of this user. Use them naturally and never mention tiers or databases.
+If a personal detail isn't in them (or in this conversation), say you don't know it yet — never guess names, dates or facts about the user.
+When a sentence relies on one of them, cite its tag right after it, each in its own brackets, like [M2] or [M1][P3] — only tags shown below or returned by search_memory, and never for general knowledge.
+
+TOOLS: Use tools to act (play or open things, draft messages, reminders, tasks, memory, goals${channel === 'telegram' ? '' : ', calendar'}) and for live or exact facts (weather, Wikipedia, web, currency, arithmetic, date math).
+- Never take an action the user didn't ask for, and never claim you did something unless a tool result in this turn confirms it; if a tool fails, say so.
+- create_reminder only for a NEW request in the user's latest message — not when they ask about, confirm or thank you for an existing one.
+- "Play …" means YouTube unless they say Spotify. Make queries specific ("official audio", "official trailer").
+- "Forget …" → forget. "Remember that …" → remember. Progress on a goal → log_goal.
+- After acting, confirm in one short sentence.`,
   ];
-
-  if (memory.facts.length > 0) {
-    sections.push(
-      `WHAT YOU KNOW ABOUT THE USER:\n${memory.facts.map((f) => `- ${f.content}`).join('\n')}`
-    );
+  if (channel === 'telegram') {
+    sections.push('You are chatting over Telegram: keep formatting light — short paragraphs, no tables.');
   }
 
-  if (memory.semantic.length > 0) {
-    sections.push(
-      `RELEVANT MOMENTS FROM PAST CONVERSATIONS:\n${memory.semantic
-        .map((s) => `- ${s.content}`)
-        .join('\n')}`
-    );
-  }
-
-  if (memory.window.length > 0) {
-    sections.push(
-      `CURRENT CONVERSATION SO FAR:\n${memory.window
-        .map((m) => `${m.role}: ${m.content}`)
-        .join('\n')}`
-    );
-  }
-
+  const facts = sources.filter((s) => s.kind === 'fact' && !s.formerly);
+  const former = sources.filter((s) => s.kind === 'fact' && s.formerly);
+  const moments = sources.filter((s) => s.kind === 'moment' || s.kind === 'summary');
+  const docs = sources.filter((s) => s.kind === 'doc');
+  const list = (items: MemorySource[]) => items.map((s) => `[${s.ref}] ${describeSource(s)}`).join('\n');
+  if (facts.length) sections.push(`WHAT YOU KNOW ABOUT THE USER:\n${list(facts)}`);
+  if (former.length) sections.push(`NO LONGER TRUE (history — use for "before"/"used to" questions):\n${list(former)}`);
+  if (moments.length) sections.push(`RELEVANT MOMENTS FROM PAST CONVERSATIONS:\n${list(moments)}`);
+  if (docs.length) sections.push(`FROM THE USER'S DOCUMENTS:\n${list(docs)}`);
   return sections.join('\n\n');
 }
 
 /** Without an API key the app still works end-to-end for demos. */
-function demoReply(memory: Recall): string {
+function demoReply(trace: MemoryTrace): string {
+  const facts = trace.sources.filter((s) => s.kind === 'fact');
+  const moments = trace.sources.filter((s) => s.kind !== 'fact');
   const parts = [
-    "I'm running in demo mode (no GROQ_API_KEY or GEMINI_API_KEY configured), so I can't generate a real answer — but my memory system is live:",
-    `• Working memory holds ${memory.trace.workingMemory} recent message${memory.trace.workingMemory === 1 ? '' : 's'} from this conversation.`,
-    `• I've stored ${memory.trace.episodic.length} long-term fact${memory.trace.episodic.length === 1 ? '' : 's'} about you.`,
+    "I'm running in demo mode (no GROQ_API_KEY, GEMINI_API_KEY or OLLAMA_URL configured), so I can't generate a real answer — but my memory system is live:",
+    `• Working memory holds ${trace.workingMemory} recent message${trace.workingMemory === 1 ? '' : 's'} from this conversation.`,
+    `• I recalled ${facts.length} long-term fact${facts.length === 1 ? '' : 's'} about you.`,
   ];
-  if (memory.trace.semantic.length > 0) {
-    parts.push(
-      `• Semantic recall surfaced: "${memory.trace.semantic[0].content.slice(0, 120)}"`
-    );
-  }
+  if (moments.length) parts.push(`• Semantic recall surfaced: "${moments[0].content.slice(0, 120)}"`);
   parts.push('Add a Groq or Gemini API key to .env to unlock full responses.');
   return parts.join('\n');
 }
